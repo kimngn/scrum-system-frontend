@@ -29,6 +29,11 @@ const router = createRouter({
       name: "storyboard",
       component: () => import("./views/Storyboard.vue"),
     },
+    {
+      path: "/admin",
+      name: "admin",
+      component: () => import("./views/Admin.vue"),
+    },
   ],
 });
 
