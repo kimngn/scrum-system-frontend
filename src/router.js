@@ -24,6 +24,11 @@ const router = createRouter({
       name: "ingredients",
       component: () => import("./views/IngredientList.vue"),
     },
+    {
+      path: "/storyboard",
+      name: "storyboard",
+      component: () => import("./views/Storyboard.vue"),
+    },
   ],
 });
 
