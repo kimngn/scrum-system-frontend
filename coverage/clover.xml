@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<coverage generated="1783749692408" clover="3.2.0">
+  <project timestamp="1783749692408" name="All files">
+    <metrics statements="34" coveredstatements="33" conditionals="12" coveredconditionals="12" methods="21" coveredmethods="20" elements="67" coveredelements="65" complexity="0" loc="34" ncloc="34" packages="1" files="1" classes="1"/>
+    <file name="MenuBar.vue" path="C:\xampp\htdocs\scrum-system-frontend\src\components\MenuBar.vue">
+      <metrics statements="34" coveredstatements="33" conditionals="12" coveredconditionals="12" methods="21" coveredmethods="20"/>
+      <line num="7" count="3" type="stmt"/>
+      <line num="9" count="3" type="stmt"/>
+      <line num="10" count="3" type="stmt"/>
+      <line num="11" count="3" type="stmt"/>
+      <line num="13" count="3" type="stmt"/>
+      <line num="14" count="3" type="stmt"/>
+      <line num="15" count="3" type="stmt"/>
+      <line num="19" count="1" type="stmt"/>
+      <line num="21" count="1" type="stmt"/>
+      <line num="24" count="0" type="stmt"/>
+      <line num="26" count="1" type="stmt"/>
+      <line num="27" count="1" type="stmt"/>
+      <line num="28" count="1" type="stmt"/>
+      <line num="33" count="3" type="stmt"/>
+      <line num="42" count="6" type="stmt"/>
+      <line num="43" count="6" type="stmt"/>
+      <line num="45" count="3" type="stmt"/>
+      <line num="48" count="3" type="stmt"/>
+      <line num="51" count="4" type="stmt"/>
+      <line num="54" count="2" type="stmt"/>
+      <line num="57" count="2" type="stmt"/>
+      <line num="60" count="2" type="stmt"/>
+      <line num="62" count="2" type="stmt"/>
+      <line num="65" count="1" type="stmt"/>
+      <line num="67" count="2" type="stmt"/>
+      <line num="68" count="2" type="stmt"/>
+      <line num="73" count="1" type="stmt"/>
+      <line num="75" count="1" type="stmt"/>
+      <line num="77" count="2" type="stmt"/>
+      <line num="80" count="1" type="stmt"/>
+      <line num="84" count="2" type="cond" truecount="2" falsecount="0"/>
+      <line num="85" count="2" type="stmt"/>
+      <line num="86" count="2" type="stmt"/>
+      <line num="87" count="2" type="stmt"/>
+    </file>
+  </project>
+</coverage>
