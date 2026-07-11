@@ -52,6 +52,9 @@
       <v-btn v-if="user !== null" class="mx-2" :to="{ name: 'ingredients' }">
         Ingredients
       </v-btn>
+      <v-btn v-if="user !== null" class="mx-2" :to="{ name: 'storyboard' }">
+        Storyboard
+      </v-btn>
       <v-btn v-if="user !== null" class="mx-2" :to="{ name: 'admin' }">
         Admin
       </v-btn>
