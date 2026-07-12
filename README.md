@@ -1,4 +1,6 @@
-# Recipe Frontend with Vue 3
+# Scrum System Frontend
+
+![Coverage](./badges/coverage.svg)
 
 This application allows users to create and maintain recipes. Please visit https://github.com/mattmiller64/recipe-backend for the backend repository.
 
@@ -17,7 +19,6 @@ npm install
 ```
 
 3. Make sure **Apache** is running.
-
    - We recommend using XAMPP to serve this project.
    - In XAMPP, make sure that **Apache** is running.
 
