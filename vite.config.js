@@ -11,23 +11,26 @@ export default () => {
 
   return defineConfig({
     plugins: [vue(), vuetify({ autoImport: true })],
-    
+
     test: {
+      coverage: {
+        reporter: ["text", "json", "json-summary", "lcov", "html"],
+      },
       // This activates browser-like globals such as 'window' and 'document'
-      environment: 'jsdom',
-      
+      environment: "jsdom",
+
       // Tells Vitest to find any files ending in .spec.js or .test.js
-      include: ['src/**/*.{test,spec}.{js,ts,jsx,tsx}'],
-      
+      include: ["src/**/*.{test,spec}.{js,ts,jsx,tsx}"],
+
       // CRITICAL: Turn off CSS parsing inside Vitest entirely
       css: false,
-      
+
       // Move the dependency inlining inside the test block
       server: {
         deps: {
-          inline: ['vuetify']
-        }
-      }
+          inline: ["vuetify"],
+        },
+      },
     },
 
     server: {
