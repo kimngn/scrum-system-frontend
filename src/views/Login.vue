@@ -25,8 +25,8 @@ onMounted(async () => {
   // }
 });
 
-function navigateToRecipes() {
-  router.push({ name: "recipes" });
+function navigateToProjects() {
+  router.push({ name: "projects" });
 }
 
 async function createAccount() {
@@ -52,7 +52,7 @@ async function login() {
       snackbar.value.value = true;
       snackbar.value.color = "green";
       snackbar.value.text = "Login successful!";
-      router.push({ name: "recipes" });
+      router.push({ name: "projects" });
     })
     .catch((error) => {
       console.log(error);
@@ -102,20 +102,6 @@ function closeSnackBar() {
           <v-btn variant="flat" color="primary" @click="login()">Login</v-btn>
         </v-card-actions>
       </v-card>
-
-      <v-card class="rounded-lg elevation-5 my-8">
-        <v-card-title class="text-center headline">
-          <v-btn
-            class="ml-2"
-            variant="flat"
-            color="secondary"
-            @click="navigateToRecipes()"
-          >
-            View Published Recipes
-          </v-btn>
-        </v-card-title>
-      </v-card>
-
       <v-dialog persistent v-model="isCreateAccount" width="800">
         <v-card class="rounded-lg elevation-5">
           <v-card-title class="headline mb-2">Create Account </v-card-title>
