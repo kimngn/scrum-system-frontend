@@ -2,6 +2,7 @@
   import { onMounted } from "vue";
   import { ref } from "vue";
   import { Tabs, Tab } from "super-vue3-tabs";
+  import UserTab from "../components/UserTab.vue";
 </script>
 
 <template>
@@ -12,7 +13,7 @@
         <template #icon>
           <i class="fas fa-home"></i>
         </template>
-        <p>Put list of users here</p>
+        <UserTab />
       </Tab>
       <Tab value="Projects">
         <template #icon>
