@@ -4,4 +4,13 @@ export default {
   getStoriesForProject(projectId) {
     return apiClient.get("projects/" + projectId + "/stories");
   },
+  createStory(story) {
+    return apiClient.post("stories", story);
+  },
+  updateStory(storyId, story) {
+    return apiClient.put("stories/" + storyId, story);
+  },
+  deleteStory(storyId) {
+    return apiClient.delete("stories/" + storyId);
+  },
 };
