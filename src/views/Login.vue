@@ -1,78 +1,78 @@
 <script setup>
-  import { onMounted } from "vue";
-  import { ref, toRaw } from "vue";
-  import { useRouter } from "vue-router";
-  import UserServices from "../services/UserServices.js";
+import { onMounted } from "vue";
+import { ref, toRaw } from "vue";
+import { useRouter } from "vue-router";
+import UserServices from "../services/UserServices.js";
 
-  const router = useRouter();
-  const isCreateAccount = ref(false);
-  const snackbar = ref({
-    value: false,
-    color: "",
-    text: "",
-  });
-  const user = ref({
-    firstName: "",
-    lastName: "",
-    email: "",
-    password: "",
-  });
+const router = useRouter();
+const isCreateAccount = ref(false);
+const snackbar = ref({
+  value: false,
+  color: "",
+  text: "",
+});
+const user = ref({
+  firstName: "",
+  lastName: "",
+  email: "",
+  password: "",
+});
 
-  onMounted(async () => {
-    localStorage.removeItem("user");
-    // if (localStorage.getItem("user") !== null) {
-    //   router.push({ name: "recipes" });
-    // }
-  });
+onMounted(async () => {
+  localStorage.removeItem("user");
+  // if (localStorage.getItem("user") !== null) {
+  //   router.push({ name: "projects" });
+  // }
+});
 
-  function navigateToRecipes() {
-    router.push({ name: "recipes" });
-  }
+async function createAccount() {
+  await UserServices.addUser(user.value)
+    .then(() => {
+      snackbar.value.value = true;
+      snackbar.value.color = "green";
+      snackbar.value.text = "Account created successfully!";
+      router.push({ name: "login" });
+    })
+    .catch((error) => {
+      console.log(error);
+      snackbar.value.value = true;
+      snackbar.value.color = "error";
+      snackbar.value.text = error.response.data.message;
+    });
+}
 
-  async function createAccount() {
-    await UserServices.addUser(user.value)
-      .then(() => {
-        snackbar.value.value = true;
-        snackbar.value.color = "green";
-        snackbar.value.text = "Account created successfully!";
-        router.push({ name: "login" });
-      })
-      .catch((error) => {
-        console.log(error);
-        snackbar.value.value = true;
-        snackbar.value.color = "error";
-        snackbar.value.text = error.response.data.message;
-      });
-  }
+async function login() {
+  await UserServices.loginUser(user)
+    .then((data) => {
+      window.localStorage.setItem("user", JSON.stringify(data.data));
+      snackbar.value.value = true;
+      snackbar.value.color = "green";
+      snackbar.value.text = "Login successful!";
+      if (data.data.role === "admin" || data.data.role === "lead") {
+        router.push({ name: "admin" });
+      } else {
+        router.push({ name: "projects" });
+      }
+    })
+    .catch((error) => {
+      console.log(error);
+      snackbar.value.value = true;
+      snackbar.value.color = "error";
+      snackbar.value.text = error.response.data.message;
+    });
+}
 
-  async function login() {
-    await UserServices.loginUser(user)
-      .then((data) => {
-        window.localStorage.setItem("user", JSON.stringify(data.data));
-        snackbar.value.value = true;
-        snackbar.value.color = "green";
-        snackbar.value.text = "Login successful!";
-        router.push({ name: "recipes" });
-      })
-      .catch((error) => {
-        console.log(error);
-        snackbar.value.value = true;
-        snackbar.value.color = "error";
-        snackbar.value.text = error.response.data.message;
-      });
-  }
+function openCreateAccount() {
+  isCreateAccount.value = true;
+}
 
-  function openCreateAccount() {
-    isCreateAccount.value = true;
-  }
+function closeCreateAccount() {
+  isCreateAccount.value = false;
+}
 
-  function closeCreateAccount() {
-    isCreateAccount.value = false;
-  }
-
-  function closeSnackBar() {
-    snackbar.value.value = false;
-  }
+function closeSnackBar() {
+  snackbar.value.value = false;
+}
 </script>
 
 <template>
@@ -102,20 +102,6 @@
           <v-btn variant="flat" color="primary" @click="login()">Login</v-btn>
         </v-card-actions>
       </v-card>
-
-      <v-card class="rounded-lg elevation-5 my-8">
-        <v-card-title class="text-center headline">
-          <v-btn
-            class="ml-2"
-            variant="flat"
-            color="secondary"
-            @click="navigateToRecipes()"
-          >
-            View Published Recipes
-          </v-btn>
-        </v-card-title>
-      </v-card>
-
       <v-dialog persistent v-model="isCreateAccount" width="800">
         <v-card class="rounded-lg elevation-5">
           <v-card-title class="headline mb-2">Create Account </v-card-title>

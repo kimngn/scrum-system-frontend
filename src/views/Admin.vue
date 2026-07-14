@@ -1,6 +1,7 @@
 <script setup>
   import { onMounted } from "vue";
   import { ref } from "vue";
+  import { useRouter } from "vue-router";
   import { Tabs, Tab } from "super-vue3-tabs";
   import UserTab from "../components/UserTab.vue";
 </script>
@@ -19,7 +20,7 @@
         <template #icon>
           <i class="fas fa-user"></i>
         </template>
-        <p>Put list of projects here</p>
+        <ProjectList />
       </Tab>
       <Tab value="Sprints">
         <template #icon>
@@ -49,5 +50,12 @@
         <p>Put list of acceptance criterias here</p>
       </Tab>
     </Tabs>
+
+    <v-snackbar v-model="snackbar.value" rounded="pill">
+      {{ snackbar.text }}
+      <template v-slot:actions>
+        <v-btn :color="snackbar.color" variant="text" @click="snackbar.value = false">Close</v-btn>
+      </template>
+    </v-snackbar>
   </v-container>
 </template>
