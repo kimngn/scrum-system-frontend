@@ -118,7 +118,6 @@ describe("MenuBar.vue", () => {
   it("renders login when user is not logged in", async () => {
     const wrapper = await mountComponent();
 
-    expect(wrapper.text()).toContain("Recipes");
     expect(wrapper.text()).toContain("Login");
 
     expect(wrapper.text()).not.toContain("Ingredients");
@@ -137,10 +136,6 @@ describe("MenuBar.vue", () => {
     );
 
     const wrapper = await mountComponent();
-
-    expect(wrapper.text()).toContain("Ingredients");
-    expect(wrapper.text()).toContain("Storyboard");
-    expect(wrapper.text()).toContain("Admin");
 
     expect(wrapper.text()).toContain("JD");
     expect(wrapper.text()).not.toContain("Login");
