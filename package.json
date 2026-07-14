@@ -20,7 +20,7 @@
     "super-vue3-tabs": "^1.2.5",
     "vue": "^3.2.41",
     "vue-router": "^4.1.6",
-    "vuetify": "^3.2.3",
+    "vuetify": "^3.12.9",
     "vuex": "^4.0.2",
     "webfontloader": "^1.6.28"
   },
