@@ -307,7 +307,7 @@ async function deleteStory() {
     </div>
 
     <!-- Popup dialog. -->
-    <v-dialog v-model="showDialog" width="500" height="500">
+    <v-dialog v-model="showDialog" width="500">
       <v-card class="story-dialog-card">
         
         <v-card-title>
