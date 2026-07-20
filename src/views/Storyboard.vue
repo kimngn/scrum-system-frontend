@@ -24,6 +24,7 @@ const columns = ref([]);
 const draggedStory = ref(null);
 // Stores the columnId being dragged over.
 const hoverColumnId = ref(null);
+const storyPoints = [1, 2, 3, 5, 8, 13, 21, 34, 55, 89,];
 
 // Form popup state.
 const showDialog = ref(false);
@@ -34,6 +35,9 @@ const formTitle = ref("");
 const formDescription = ref("");
 const formPriority = ref("Medium");
 const formStoryPoint = ref(null);
+// Hardcoded assignee until it's connected to the backend.
+const assigneeOptions = [];
+const formAssignee = ref(null);
 
 onMounted(async () => {
   // Gets the stories from the backend.
@@ -303,8 +307,9 @@ async function deleteStory() {
     </div>
 
     <!-- Popup dialog. -->
-    <v-dialog v-model="showDialog" width="500">
-      <v-card>
+    <v-dialog v-model="showDialog" width="500" height="500">
+      <v-card class="story-dialog-card">
+        
         <v-card-title>
           {{ isEditing ? "Edit User Story" : "New User Story" }}
         </v-card-title>
@@ -321,17 +326,28 @@ async function deleteStory() {
             label="Description"
           ></v-textarea>
 
-           <!-- Priority dropdown -->
-          <v-select
-            v-model="formPriority" :items="priorityOptions"
-            label="Priority"
-          ></v-select>
+          <v-row>
+            <!-- Priority dropdown -->
+            <v-col cols="6">
+              <v-select
+                v-model="formPriority" :items="priorityOptions"
+                label="Priority"
+              ></v-select>
+            </v-col>
+            <!-- Story point dropdown -->
+            <v-col cols="6">
+              <v-select
+                v-model="formStoryPoint" :items="storyPoints"
+                label="Story Points"
+              ></v-select>
+            </v-col>
+          </v-row>
 
-          <v-text-field
-            v-model.number="formStoryPoint"
-            label="Story Points"
-            type="number"
-          ></v-text-field>
+          <!-- Assignee dropdown -->
+          <v-select
+            v-model="formAssignee" :items="assigneeOptions"
+            label="Assignee"
+          ></v-select>
         </v-card-text>
         <!-- If a user clicks edit show delete/save button. -->
         <v-card-actions>
@@ -392,5 +408,8 @@ async function deleteStory() {
   padding-bottom: 35px;
   padding-left: 10px;
   padding-right: 10px;
+}
+.story-dialog-card {  
+transform: translateY(-56px);
 }
 </style>
