@@ -4,7 +4,10 @@
   "scripts": {
     "dev": "cross-env APP_ENV=development vite",
     "build": "cross-env APP_ENV=production vite build",
-    "preview": "cross-env vite preview"
+    "preview": "cross-env vite preview",
+    "test": "vitest",
+    "coverage:badge": "coverage-badges",
+    "coverage:full": "npm test -- --coverage && coverage-badges"
   },
   "dependencies": {
     "@mdi/font": "^7.0.96",
@@ -18,15 +21,20 @@
     "super-vue3-tabs": "^1.2.5",
     "vue": "^3.2.41",
     "vue-router": "^4.1.6",
-    "vuetify": "^3.2.3",
+    "vuetify": "^3.12.9",
     "vuex": "^4.0.2",
     "webfontloader": "^1.6.28"
   },
   "devDependencies": {
     "@mdi/js": "^7.0.96",
     "@vitejs/plugin-vue": "^5.0.4",
+    "@vitest/coverage-v8": "^4.1.10",
+    "@vue/test-utils": "^2.4.11",
+    "coverage-badges": "^1.0.7",
+    "jsdom": "^29.1.1",
     "vite": "^5.2.11",
     "vite-plugin-vuetify": "^2.0.3",
+    "vitest": "^4.1.10",
     "vue-cli-plugin-vuetify": "~2.5.8"
   },
   "type": "module"
