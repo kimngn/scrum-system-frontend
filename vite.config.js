@@ -35,7 +35,7 @@ export default () => {
 
     server: {
       // This remains here for your normal local browser development server
-      host: "localhost",
+      host: "0.0.0.0",
       port: 8081,
     },
     base: baseURL,
