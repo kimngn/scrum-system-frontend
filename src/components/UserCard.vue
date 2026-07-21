@@ -172,10 +172,13 @@
           <!-- each column takes up the whole row -->
           <v-col class="pl-6" cols="12">
             <v-row class="mt-3 subheader">PROJECTS</v-row>
-            <v-col class="mt-4" cols="4"
-              ><v-chip class="vchipStyle" v-for="project in projects">{{
-                project.name
-              }}</v-chip></v-col
+
+            <v-col class="mt-4" cols="12">
+              <div class="d-flex flex-wrap ga-2">
+                <v-chip class="vchipStyle" v-for="project in projects">{{
+                  project.name
+                }}</v-chip>
+              </div></v-col
             >
           </v-col>
         </v-row>
@@ -284,7 +287,7 @@
 
   /* try not to affect all v-chips */
   .vchipStyle.v-chip {
-    background-color: rgb(255, 118, 118);
-    color: white;
+    background-color: rgb(229, 228, 228);
+    color: black;
   }
 </style>

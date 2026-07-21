@@ -5,6 +5,7 @@
   import RepoServices from "../services/RepoServices.js";
   import UserServices from "../services/UserServices.js";
   import ProjectMembershipServices from "../services/ProjectMembershipServices.js";
+  import Repo from "../components/Repo.vue";
 
   const router = useRouter();
   const projects = ref([]);
@@ -289,6 +290,17 @@
                 }}</v-row>
               </v-col>
             </v-row>
+
+            <v-row class="mb-2" align="center">
+              <v-col class="pl-6" cols="6">
+                <v-row class="mt-3 subheader">REPOS</v-row>
+                <v-row>
+                  <!-- todo: put repositories component here -->
+                  <Repo :projectId="p.id" />
+                </v-row>
+              </v-col>
+            </v-row>
+
             <v-row class="mb-2" v-if="user && user.role !== 'member'">
               <v-col cols="2">
                 <button @click.stop="openEdit(p)" class="editButtonStyle">
