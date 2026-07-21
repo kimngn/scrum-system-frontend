@@ -20,6 +20,11 @@ const projectId = 1;
 const stories = ref([]);
 // Stores columns used by template.
 const columns = ref([]);
+// Stores the dragged story.
+const draggedStory = ref(null);
+// Stores the columnId being dragged over.
+const hoverColumnId = ref(null);
+const storyPoints = [1, 2, 3, 5, 8, 13, 21, 34, 55, 89,];
 
 // Form popup state.
 const showDialog = ref(false);
@@ -30,6 +35,9 @@ const formTitle = ref("");
 const formDescription = ref("");
 const formPriority = ref("Medium");
 const formStoryPoint = ref(null);
+// Hardcoded assignee until it's connected to the backend.
+const assigneeOptions = [];
+const formAssignee = ref(null);
 
 onMounted(async () => {
   // Gets the stories from the backend.
@@ -117,6 +125,55 @@ function openEditDialog(story) {
   showDialog.value = true;
 }
 
+// Save story being dragged.
+async function startDrag(story){
+  draggedStory.value = story;
+}
+
+// Clears drag values.
+function endDrag() {
+  draggedStory.value = null;
+  hoverColumnId.value = null;
+}
+
+// Outlines the column being dragged over.
+function dragEnter(columnId) {
+  hoverColumnId.value = columnId;
+}
+
+async function dropStory(columnId){
+  hoverColumnId.value = null;
+
+  // If story is dropped in the same column do nothing.
+  if (draggedStory.value.columnId === columnId) {
+    draggedStory.value = null;
+    return;
+  }
+
+  const updatedStory = {
+    title: draggedStory.value.title,
+    description: draggedStory.value.description,
+    priority: draggedStory.value.priority,
+    storyPoint: draggedStory.value.storyPoint,
+    projectId: draggedStory.value.projectId,
+    columnId: columnId,
+  };
+
+  try {
+    // Updates story new column id.
+    await StoryboardServices.updateStory(
+      draggedStory.value.id,
+      updatedStory,
+    );
+
+    // Refresh story board.
+    await getStories();
+  } catch (error) {
+    console.log(error);
+  }
+
+  draggedStory.value = null;
+}
 async function saveStory() {
   // Title can't be empty.
   if (formTitle.value === "") {
@@ -167,8 +224,11 @@ async function deleteStory() {
     <div class="storyboard-columns">
       <!-- Loops through each storyboard column and displays it. -->
       <div
+        :class="{ 'dragging-active': hoverColumnId === column.id }"
         v-for="column in columns" :key="column.title"
         class="storyboard-column"
+        @dragover.prevent="dragEnter(column.id)"
+        @drop="dropStory(column.id)"
       >
         <div class="column-header">
           <span class="text-subtitle-1 font-weight-bold">
@@ -204,6 +264,9 @@ async function deleteStory() {
           v-for="story in column.stories" :key="story.id"
           class="story-card"
           variant="elevated"
+          draggable="true"
+          @dragstart="startDrag(story)"
+          @dragend="endDrag()"
           @click="openEditDialog(story)"
         >
           <!-- Story card content -->
@@ -245,7 +308,8 @@ async function deleteStory() {
 
     <!-- Popup dialog. -->
     <v-dialog v-model="showDialog" width="500">
-      <v-card>
+      <v-card class="story-dialog-card">
+        
         <v-card-title>
           {{ isEditing ? "Edit User Story" : "New User Story" }}
         </v-card-title>
@@ -262,17 +326,28 @@ async function deleteStory() {
             label="Description"
           ></v-textarea>
 
-           <!-- Priority dropdown -->
-          <v-select
-            v-model="formPriority" :items="priorityOptions"
-            label="Priority"
-          ></v-select>
+          <v-row>
+            <!-- Priority dropdown -->
+            <v-col cols="6">
+              <v-select
+                v-model="formPriority" :items="priorityOptions"
+                label="Priority"
+              ></v-select>
+            </v-col>
+            <!-- Story point dropdown -->
+            <v-col cols="6">
+              <v-select
+                v-model="formStoryPoint" :items="storyPoints"
+                label="Story Points"
+              ></v-select>
+            </v-col>
+          </v-row>
 
-          <v-text-field
-            v-model.number="formStoryPoint"
-            label="Story Points"
-            type="number"
-          ></v-text-field>
+          <!-- Assignee dropdown -->
+          <v-select
+            v-model="formAssignee" :items="assigneeOptions"
+            label="Assignee"
+          ></v-select>
         </v-card-text>
         <!-- If a user clicks edit show delete/save button. -->
         <v-card-actions>
@@ -325,5 +400,16 @@ async function deleteStory() {
   border-radius: 4px;
   padding: 24px 8px;
   text-align: center;
+}
+
+.dragging-active {
+  border: 2px solid #0a3158;
+  background-color: rgba(12, 57, 103, 0.08);
+  padding-bottom: 35px;
+  padding-left: 10px;
+  padding-right: 10px;
+}
+.story-dialog-card {  
+transform: translateY(-56px);
 }
 </style>
