@@ -1,6 +1,9 @@
 <script setup>
 import { onMounted, ref } from "vue";
+import { useRouter } from "vue-router";
 import StoryboardServices from "../services/StoryboardServices.js";
+import ProjectServices from "../services/ProjectServices.js";
+import ProjectMembershipServices from "../services/ProjectMembershipServices.js";
 
 // Column ids to match the seeded columns in the backend.
 const columnDefinitions = [
@@ -14,8 +17,10 @@ const columnDefinitions = [
 
 const priorityOptions = ["Critical", "High", "Medium", "Low"];
 
-// Hardcoded project id.
-const projectId = 1;
+const router = useRouter();
+const user = ref(null);
+// Id of the logged in user's project, fetched from the backend.
+const projectId = ref(null);
 // Stores stories from the backend.
 const stories = ref([]);
 // Stores columns used by template.
@@ -25,7 +30,8 @@ const draggedStory = ref(null);
 // Stores the columnId being dragged over.
 const hoverColumnId = ref(null);
 const storyPoints = [1, 2, 3, 5, 8, 13, 21, 34, 55, 89,];
-
+// Shows snackbar error when there is no projectId.
+const showProjectError = ref(false);
 // Form popup state.
 const showDialog = ref(false);
 const isEditing = ref(false);
@@ -35,18 +41,63 @@ const formTitle = ref("");
 const formDescription = ref("");
 const formPriority = ref("Medium");
 const formStoryPoint = ref(null);
-// Hardcoded assignee until it's connected to the backend.
-const assigneeOptions = [];
-const formAssignee = ref(null);
+// Users assigned to the project, shown in the assignee dropdown.
+const assigneeOptions = ref([]);
+const formAssignee = ref([]);
 
 onMounted(async () => {
+  // Gets the logged in user from local storage.
+  user.value = JSON.parse(localStorage.getItem("user"));
+  if (!user.value) {
+    router.push({ name: "login" });
+    return;
+  }
+
+  // Gets the user's project from the backend.
+  await ProjectServices.getProjectsByUserId(user.value.id)
+    .then((response) => {
+      // Saves the first project id.
+      projectId.value = response.data[0].id;
+    })
+    .catch((error) => {
+      console.log(error);
+    });
+
+  // Gets the user assignees from the backend
+  await getAssignees();
   // Gets the stories from the backend.
   await getStories();
 });
 
+// Gets the members of the project so they can be picked as an assignee.
+async function getAssignees() {
+  if (!projectId.value) {
+    return;
+  }
+
+  // Gets the members of the project from the backend.
+  await ProjectMembershipServices.getMembershipsByProjectId(projectId.value)
+    .then((response) => {
+      const options = [];
+      //loops through members and adds them to options array.
+      for (let i = 0; i < response.data.length; i++) {
+        const membership = response.data[i];
+        options.push({
+          title: membership.user.firstName + " " + membership.user.lastName,
+          value: membership.user.id,
+          email: membership.user.email,
+        });
+      }
+      assigneeOptions.value = options;
+    })
+    .catch((error) => {
+      console.log(error);
+    });
+}
+
 // Gets stories for the project.
 async function getStories() {
-  await StoryboardServices.getStoriesForProject(projectId)
+  await StoryboardServices.getStoriesForProject(projectId.value)
     .then((response) => {
       // Saves the stories from the backend.
       stories.value = response.data;
@@ -110,6 +161,7 @@ function openCreateDialog(columnId) {
   formDescription.value = "";
   formPriority.value = "";
   formStoryPoint.value = null;
+  formAssignee.value = [];
   showDialog.value = true;
 }
 
@@ -122,6 +174,7 @@ function openEditDialog(story) {
   formDescription.value = story.description;
   formPriority.value = story.priority;
   formStoryPoint.value = story.storyPoint;
+  formAssignee.value = [];
   showDialog.value = true;
 }
 
@@ -185,7 +238,7 @@ async function saveStory() {
     description: formDescription.value,
     priority: formPriority.value,
     storyPoint: formStoryPoint.value,
-    projectId: projectId,
+    projectId: projectId.value,
     columnId: selectedColumnId.value,
   };
 
@@ -242,8 +295,19 @@ async function deleteStory() {
 
           <v-spacer></v-spacer>
 
+          <!-- Shows a red X when there is no project. -->
+          <v-btn
+            v-if="!projectId"
+            icon="mdi-close"
+            color="red"
+            size="small"
+            variant="text"
+            @click="showProjectError = true"
+          ></v-btn>
+         
           <!-- Button for the create dialog. -->
           <v-btn
+            v-else
             icon="mdi-plus"
             size="small"
             variant="text"
@@ -343,11 +407,22 @@ async function deleteStory() {
             </v-col>
           </v-row>
 
-          <!-- Assignee dropdown -->
+          <!-- Shows assignees email under name -->
           <v-select
-            v-model="formAssignee" :items="assigneeOptions"
+            v-model="formAssignee"
+            :items="assigneeOptions"
             label="Assignee"
-          ></v-select>
+            multiple
+            chips
+          >
+            <!-- Assignee items -->
+            <template v-slot:item="{ props, item }">
+              <v-list-item
+                v-bind="props"
+                :subtitle="item.raw.email"
+              ></v-list-item>
+            </template>
+          </v-select>
         </v-card-text>
         <!-- If a user clicks edit show delete/save button. -->
         <v-card-actions>
@@ -368,6 +443,16 @@ async function deleteStory() {
         </v-card-actions>
       </v-card>
     </v-dialog>
+    <!-- Error snackbar for project errors. -->
+    <v-snackbar
+      v-model="showProjectError"
+      location="bottom"
+      timeout="3000"
+      color="red"
+    >
+      You must be in a project before creating a user story.
+    </v-snackbar>
+
   </v-container>
 </template>
 
