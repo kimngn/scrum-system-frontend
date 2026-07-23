@@ -1,329 +1,211 @@
-<script setup>
-import { onMounted, ref } from "vue";
-import StoryboardServices from "../services/StoryboardServices.js";
-
-// Column ids to match the seeded columns in the backend.
-const columnDefinitions = [
-  { id: 1, title: "Backlog" },
-  { id: 2, title: "To Do" },
-  { id: 3, title: "In Progress" },
-  { id: 4, title: "Ready for Test" },
-  { id: 5, title: "Testing" },
-  { id: 6, title: "Done" },
-];
-
-const priorityOptions = ["Critical", "High", "Medium", "Low"];
-
-// Hardcoded project id.
-const projectId = 1;
-// Stores stories from the backend.
-const stories = ref([]);
-// Stores columns used by template.
-const columns = ref([]);
-
-// Form popup state.
-const showDialog = ref(false);
-const isEditing = ref(false);
-const editingStoryId = ref(null);
-const selectedColumnId = ref(null);
-const formTitle = ref("");
-const formDescription = ref("");
-const formPriority = ref("Medium");
-const formStoryPoint = ref(null);
-
-onMounted(async () => {
-  // Gets the stories from the backend.
-  await getStories();
-});
-
-// Gets stories for the project.
-async function getStories() {
-  await StoryboardServices.getStoriesForProject(projectId)
-    .then((response) => {
-      // Saves the stories from the backend.
-      stories.value = response.data;
-      buildColumns();
-    })
-    .catch((error) => {
-      console.log(error);
-    });
-}
-
-function buildColumns() {
-  // Temp array to hold all columns before updating columns.value.
-  const columnList = [];
-
-  // Creates each storyboard column using columnDefinitions.
-  for (let i = 0; i < columnDefinitions.length; i++) {
-    columnList.push({
-      id: columnDefinitions[i].id,
-      title: columnDefinitions[i].title,
-
-      // Starts columns with empty story list.
-      stories: [],
-    });
-  }
-
-  // Loops through every story returned from the backend.
-  for (let i = 0; i < stories.value.length; i++) {
-    const story = stories.value[i];
-
-    // Checks each column to find where the story belongs.
-    for (let j = 0; j < columnList.length; j++) {
-      // If story's column title matches this column title add story to that column.
-      if (columnList[j].id === story.column.id) {
-        columnList[j].stories.push(story);
-      }
-    }
-  }
-
-  // Saves the finished columns so they show on the page.
-  columns.value = columnList;
-}
-
-function getPriorityColor(priority) {
-  if (priority === "Critical") {
-    return "red";
-  } else if (priority === "High") {
-    return "orange";
-  } else if (priority === "Medium") {
-    return "yellow";
-  } else if (priority === "Low") {
-    return "grey";
-  }
-}
-
-// Opens the dialog empty.
-function openCreateDialog(columnId) {
-  isEditing.value = false;
-  editingStoryId.value = null;
-  selectedColumnId.value = columnId;
-  formTitle.value = "";
-  formDescription.value = "";
-  formPriority.value = "";
-  formStoryPoint.value = null;
-  showDialog.value = true;
-}
-
-// Opens the dialog filled with the selected story's info
-function openEditDialog(story) {
-  isEditing.value = true;
-  editingStoryId.value = story.id;
-  selectedColumnId.value = story.columnId;
-  formTitle.value = story.title;
-  formDescription.value = story.description;
-  formPriority.value = story.priority;
-  formStoryPoint.value = story.storyPoint;
-  showDialog.value = true;
-}
-
-async function saveStory() {
-  // Title can't be empty.
-  if (formTitle.value === "") {
-    return;
-  }
-
-  const story = {
-    title: formTitle.value,
-    description: formDescription.value,
-    priority: formPriority.value,
-    storyPoint: formStoryPoint.value,
-    projectId: projectId,
-    columnId: selectedColumnId.value,
-  };
-
-  if (isEditing.value) {
-    await StoryboardServices.updateStory(editingStoryId.value, story);
-  } else {
-    await StoryboardServices.createStory(story);
-  }
-
-  await getStories();
-  showDialog.value = false;
-}
-
-async function deleteStory() {
-  try {
-    // Send story id to backend to delete it.
-    await StoryboardServices.deleteStory(editingStoryId.value);
-    // Refresh the stories.
-    await getStories();
-    showDialog.value = false;
-  } catch (error) {
-    console.log(error);
-  }
-}
-</script>
-
 <template>
-  <!-- fluid makes it use the full width. -->
   <v-container fluid>
-
-    <v-card-title class="pl-0 text-h4 font-weight-bold">
-      Storyboard
-    </v-card-title>
-
-    <!-- Holds all storyboard columns in a horizontal row. -->
-    <div class="storyboard-columns">
-      <!-- Loops through each storyboard column and displays it. -->
-      <div
-        v-for="column in columns" :key="column.title"
-        class="storyboard-column"
-      >
-        <div class="column-header">
-          <span class="text-subtitle-1 font-weight-bold">
-            {{ column.title }}
-          </span>
-
-          <!-- Displays the number of stories inside the column. -->
-          <v-chip size="small" class="ml-2">
-            {{ column.stories.length }}
-          </v-chip>
-
-          <v-spacer></v-spacer>
-
-          <!-- Button for the create dialog. -->
-          <v-btn
-            icon="mdi-plus"
-            size="small"
-            variant="text"
-            @click="openCreateDialog(column.id)"
-          ></v-btn>
+    <!-- Header -->
+    <div class="d-flex justify-space-between align-center mb-4">
+      <div>
+        <h2 class="text-h5 font-weight-bold">Backlog</h2>
+        <div class="text-grey">
+          {{ filteredStories.length }} Stories
         </div>
-
-        <!-- If no stories. -->
-        <div
-          v-if="column.stories.length === 0"
-          class="drop-here text-caption text-medium-emphasis"
-        >
-          Drop here
-        </div>
-
-        <!-- Loops through each story inside the current column. -->
-        <v-card
-          v-for="story in column.stories" :key="story.id"
-          class="story-card"
-          variant="elevated"
-          @click="openEditDialog(story)"
-        >
-          <!-- Story card content -->
-          <v-card-text>
-            <!-- Top row of the card -->
-            <div class="d-flex align-center justify-space-between">
-              <!-- Displays user story number. -->
-              <span class="text-caption text-medium-emphasis">
-                US-{{ story.id }}
-              </span>
-
-              <!-- Displays the priority with a color. -->
-              <v-chip
-                v-if="story.priority" :color="getPriorityColor(story.priority)"
-                size="small"
-                label
-              >
-                {{ story.priority }}
-              </v-chip>
-            </div>
-
-            <div class="text-body-1 font-weight-medium mt-2">
-              {{ story.title }}
-            </div>
-
-            <div class="text-caption text-medium-emphasis mt-1">
-              {{ story.description }}
-            </div>
-
-            <div class="mt-2" v-if="story.storyPoint !== null">
-              <v-chip size="small" variant="outlined">
-                {{ story.storyPoint }} pts
-              </v-chip>
-            </div>
-          </v-card-text>
-        </v-card>
       </div>
+
+      <v-btn color="primary">
+        Create Story
+      </v-btn>
     </div>
 
-    <!-- Popup dialog. -->
-    <v-dialog v-model="showDialog" width="500">
-      <v-card>
-        <v-card-title>
-          {{ isEditing ? "Edit User Story" : "New User Story" }}
-        </v-card-title>
-
-        <v-card-text>
+    <!-- Filters -->
+    <v-card class="pa-4 mb-4">
+      <v-row>
+        <v-col cols="12" md="4">
           <v-text-field
-            v-model="formTitle"
-            label="Title"
-            required
-          ></v-text-field>
+            v-model="search"
+            prepend-inner-icon="mdi-magnify"
+            label="Search stories..."
+            density="compact"
+            hide-details
+          />
+        </v-col>
 
-          <v-textarea
-            v-model="formDescription"
-            label="Description"
-          ></v-textarea>
-
-           <!-- Priority dropdown -->
+        <v-col cols="12" md="3">
           <v-select
-            v-model="formPriority" :items="priorityOptions"
-            label="Priority"
-          ></v-select>
+            v-model="selectedStatus"
+            :items="statuses"
+            label="Status"
+            density="compact"
+            hide-details
+          />
+        </v-col>
+      </v-row>
+    </v-card>
 
-          <v-text-field
-            v-model.number="formStoryPoint"
-            label="Story Points"
-            type="number"
-          ></v-text-field>
-        </v-card-text>
-        <!-- If a user clicks edit show delete/save button. -->
-        <v-card-actions>
-          <v-btn
-            v-if="isEditing"
-            color="red"
-            variant="text"
-            @click="deleteStory()"
+    <!-- Table -->
+    <v-card>
+      <v-data-table
+        :headers="headers"
+        :items="filteredStories"
+        :loading="loading"
+      >
+        <!-- Title -->
+        <template v-slot:item.title="{ item }">
+          <div class="font-weight-medium">
+            {{ item.title }}
+          </div>
+        </template>
+
+        <!-- Priority -->
+        <template v-slot:item.priority="{ item }">
+          <v-chip
+            size="small"
+            :color="priorityColor(item.priority)"
+            variant="outlined"
           >
-            Delete
-          </v-btn>
-          <!-- Spacing for save button. -->
-          <v-spacer></v-spacer>
+            {{ item.priority }}
+          </v-chip>
+        </template>
 
-          <v-btn color="green" variant="text" @click="saveStory">
-            Save
-          </v-btn>
-        </v-card-actions>
-      </v-card>
-    </v-dialog>
+        <!-- Status -->
+        <template v-slot:item.status="{ item }">
+          <v-chip
+            size="small"
+            :color="statusColor(item.status)"
+          >
+            {{ item.status }}
+          </v-chip>
+        </template>
+
+        <!-- Story Points -->
+        <template v-slot:item.storyPoint="{ item }">
+          <v-chip size="small">
+            {{ item.storyPoint }}
+          </v-chip>
+        </template>
+
+        <!-- Assignee -->
+        <template v-slot:item.assignedUser_id="{ item }">
+          {{ item.assignedUser_id }}
+        </template>
+
+        <!-- Sprint -->
+        <template v-slot:item.Sprint_id="{ item }">
+          {{ item.Sprint_id }}
+        </template>
+      </v-data-table>
+    </v-card>
   </v-container>
 </template>
 
-<style scoped>
-.storyboard-columns {
-  display: flex;
-  gap: 16px;
-  overflow-x: auto;
-  align-items: flex-start;
+<script setup>
+import { ref, computed, onMounted } from "vue";
+import StoryboardServices from "../services/StoryboardServices.js";
+
+const loading = ref(false);
+
+const search = ref("");
+const selectedStatus = ref("All");
+
+const statuses = [
+  "All",
+  "Backlog",
+  "To Do",
+  "In Progress",
+  "Ready for Test",
+  "Testing",
+  "Done"
+];
+
+const stories = ref([]);
+
+const headers = [
+  {
+    title: "ID",
+    key: "story_id",
+  },
+  {
+    title: "Title",
+    key: "title",
+  },
+  {
+    title: "Priority",
+    key: "priority",
+  },
+  {
+    title: "Status",
+    key: "status",
+  },
+  {
+    title: "PTS",
+    key: "storyPoint",
+  },
+  {
+    title: "Assignee",
+    key: "assignedUser_id",
+  },
+  {
+    title: "Sprint",
+    key: "Sprint_id",
+  },
+];
+
+async function retrieveStories() {
+  try {
+    loading.value = true;
+    const response = await StoryboardServices.getAllStoriesInBacklog();
+    stories.value = response.data;
+  } catch (error) {
+    console.error(error);
+  } finally {
+    loading.value = false;
+  }
 }
 
-.storyboard-column {
-  min-width: 280px;
-  max-width: 280px;
+const filteredStories = computed(() => {
+  return stories.value.filter((story) => {
+    const matchesSearch =
+      !search.value ||
+      story.title
+        ?.toLowerCase()
+        .includes(search.value.toLowerCase());
+
+    const matchesStatus =
+      selectedStatus.value === "All" ||
+      story.status === selectedStatus.value;
+
+    return matchesSearch && matchesStatus;
+  });
+});
+
+function priorityColor(priority) {
+  switch (priority) {
+    case "Critical":
+      return "red";
+    case "High":
+      return "orange";
+    case "Medium":
+      return "amber";
+    case "Low":
+      return "grey";
+    default:
+      return "grey";
+  }
 }
 
-.column-header {
-  display: flex;
-  align-items: center;
-  margin-bottom: 8px;
+function statusColor(status) {
+  switch (status) {
+    case "Done":
+      return "green";
+    case "In Progress":
+      return "purple";
+    case "Testing":
+      return "orange";
+    case "To Do":
+      return "red";
+    default:
+      return "grey";
+  }
 }
 
-.story-card {
-  margin-bottom: 12px;
-  cursor: pointer;
-}
-
-.drop-here {
-  border: 1px dashed #ccc;
-  border-radius: 4px;
-  padding: 24px 8px;
-  text-align: center;
-}
-</style>
+onMounted(() => {
+  retrieveStories();
+});
+</script>

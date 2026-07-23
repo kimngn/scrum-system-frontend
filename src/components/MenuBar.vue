@@ -7,7 +7,7 @@
   const router = useRouter();
 
   const user = ref(null);
-  const title = ref("Scrum System");
+  const title = ref("VELO");
   const logoURL = ref("");
 
   onMounted(() => {
