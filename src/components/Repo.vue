@@ -34,7 +34,7 @@
         target="_blank"
       >
         <v-chip class="hover-chip">
-          {{ repo.repoUrl }}
+          {{ repo.name }}
         </v-chip>
       </a>
     </div>
