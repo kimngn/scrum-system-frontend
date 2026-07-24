@@ -4,6 +4,9 @@ export default {
   getStoriesForProject(projectId) {
     return apiClient.get("projects/" + projectId + "/stories");
   },
+  getAllStoriesInBacklog(){
+    return apiClient.get("stories");
+  },
   createStory(story) {
     return apiClient.post("stories", story);
   },
