@@ -234,17 +234,21 @@
 <template>
   <v-container>
     <div id="body">
-      <v-card-title class="text-h4 font-weight-bold mb-4"
-        >Projects</v-card-title
-      >
-
-      <v-btn
-        v-if="user && user.role !== 'member'"
-        class="mb-4"
-        color="primary"
-        @click="dialog = true"
-        >Create Project</v-btn
-      >
+      <v-row align="center" class="mb-4">
+        <v-col cols="6">
+          <v-card-title class="pl-0 text-h4 font-weight-bold"
+            >Projects</v-card-title
+          >
+        </v-col>
+        <v-col class="d-flex justify-end" cols="6">
+          <v-btn
+            v-if="user && user.role !== 'member'"
+            color="accent"
+            @click="dialog = true"
+            >Create Project</v-btn
+          >
+        </v-col>
+      </v-row>
 
       <v-card
         v-for="p in projects"
@@ -301,19 +305,35 @@
               </v-col>
             </v-row>
 
-            <v-row class="mb-2" v-if="user && user.role !== 'member'">
-              <v-col cols="2">
-                <button @click.stop="openEdit(p)" class="editButtonStyle">
+            <v-row class="mb-2" justify="space-between" align="center">
+              <v-col cols="auto" class="d-flex ga-2">
+                <button
+                  v-if="user && user.role !== 'member'"
+                  @click.stop="openEdit(p)"
+                  class="editButtonStyle"
+                >
                   Edit
                 </button>
-              </v-col>
-              <v-col cols="2">
                 <button
+                  v-if="user && user.role !== 'member'"
                   @click.stop="deleteProject(p.id)"
                   class="deleteButtonStyle"
                 >
                   Delete
                 </button>
+              </v-col>
+              <v-col cols="auto">
+                <v-btn
+                  color="primary"
+                  @click.stop="
+                    router.push({
+                      name: 'project-workspace',
+                      params: { id: p.id },
+                    })
+                  "
+                >
+                  View Workspace
+                </v-btn>
               </v-col>
             </v-row>
           </v-card-text>
