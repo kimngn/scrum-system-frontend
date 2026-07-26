@@ -28,6 +28,11 @@ const router = createRouter({
       name: "backlogs",
       component: () => import("./views/Backlogs.vue"),
     },
+    {
+      path: "/projects/:id",
+      name: "project-workspace",
+      component: () => import("./views/ProjectWorkspace.vue"),
+    },
   ],
 });
 
