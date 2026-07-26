@@ -2,7 +2,7 @@
   import { onMounted } from "vue";
   import { ref } from "vue";
   import ProjectServices from "../services/ProjectServices.js";
-  import ProjectLogCard from "./ProjectLogCard.vue";
+  import ProjectHistoryCard from "./ProjectHistoryCard.vue";
 
   // Variables
   const user = ref(null); // logged in user
@@ -49,7 +49,7 @@
       </v-row>
 
       <!---->
-      <ProjectLogCard
+      <ProjectHistoryCard
         v-for="project in projects"
         :key="project.id"
         :project="project"

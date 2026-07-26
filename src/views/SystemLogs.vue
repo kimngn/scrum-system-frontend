@@ -3,7 +3,7 @@
   import { ref } from "vue";
   import { useRouter } from "vue-router";
   import { Tabs, Tab } from "super-vue3-tabs";
-  import ProjectLogTab from "../components/ProjectLogTab.vue";
+  import ProjectHistoryTab from "../components/ProjectHistoryTab.vue";
 </script>
 
 <template>
@@ -12,7 +12,7 @@
       <Tab value="Admin"> </Tab>
       <Tab value="Auth"> </Tab>
       <Tab value="Project">
-        <ProjectLogTab />
+        <ProjectHistoryTab />
       </Tab>
     </Tabs>
   </v-container>
