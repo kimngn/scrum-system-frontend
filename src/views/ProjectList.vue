@@ -15,6 +15,8 @@
   const allUsers = ref([]);
   const selectedMembers = ref([]);
   const memberSearch = ref("");
+  const addingRepo = ref(false); // for adding a new repo in the Editing dialog
+  const newRepoInput = ref(""); // for adding a new repoUrl in the Editing dialog
   const project = ref({
     name: "",
     description: "",
@@ -59,6 +61,7 @@
   }
 
   const editDialog = ref(false);
+
   const editingProject = ref({
     id: null,
     name: "",
@@ -66,6 +69,16 @@
     status: "active",
     startDate: null,
     endDate: null,
+  });
+
+  const editingRepos = ref([]); // there can be more than one repo per project. Fetches existing repos for a specific project
+
+  const editingRepo = ref({
+    // the repo being modified and to be sent to the database
+    id: null,
+    name: "",
+    repoUrl: "",
+    projectId: null,
   });
 
   function openEdit(p) {
@@ -77,25 +90,14 @@
       startDate: p.startDate ? p.startDate.split("T")[0] : null,
       endDate: p.endDate ? p.endDate.split("T")[0] : null,
     };
-    editDialog.value = true;
-  }
-
-  async function updateProject() {
-    await ProjectServices.updateProject(
-      editingProject.value.id,
-      editingProject.value,
-    )
-      .then(() => {
-        showSnackbar("green", "Project updated successfully!");
-        editDialog.value = false;
+    RepoServices.getReposByProjectId(p.id)
+      .then((response) => {
+        editingRepos.value = response.data; // store existing repos for a specific project into an array ref
       })
       .catch((error) => {
-        showSnackbar(
-          "error",
-          error.response?.data?.message || "Failed to update project",
-        );
+        console.log(error);
       });
-    await getProjects();
+    editDialog.value = true;
   }
 
   function getInitials(u) {
@@ -118,6 +120,66 @@
     await getProjects();
   });
 
+  async function saveChanges() {
+    // call updateRepo, addRepo, and updateProject all at once when Save Changes button is clicked
+    console.log("Editing project:" + editingProject.value.id);
+    let hasError = false; // false by default, if errors are found along the way, toggled to true
+
+    const projectId = editingProject.value.id;
+
+    try {
+      for (const repo of editingRepos.value) {
+        // check repo URL format
+        const match = repo.repoUrl.match(
+          /^https:\/\/github\.com\/([^\/]+)\/([^\/]+)$/,
+        );
+        if (!match) {
+          snackbar.value.value = true;
+          snackbar.value.color = "error";
+          snackbar.value.text = "Invalid Github URL format.";
+          hasError = true;
+          break;
+        }
+        // update and validate Repo if URL format is correct
+        await updateRepo(repo);
+        console.log("Update repo success!");
+      }
+      // addRepo if updating repo is successful
+      try {
+        await addRepo(projectId);
+      } catch (error) {
+        console.log(error);
+        snackbar.value.value = true;
+        snackbar.value.color = "error";
+        snackbar.value.text = error.response?.data?.message || error.message;
+        hasError = true;
+        return;
+      }
+      // updateProject if updating and adding repo is successful
+      await updateProject();
+      console.log("Update project success!");
+    } catch (error) {
+      console.log(error);
+      snackbar.value.value = true;
+      snackbar.value.color = "error";
+      snackbar.value.text = error.response.data.message;
+      hasError = true;
+    }
+    // no errors = no need to keep the dialog open
+
+    newRepoInput.value = ""; // reset input
+    addingRepo.value = false; // turn textfield back into the "Add" icon
+    editDialog.value = hasError;
+
+    if (!hasError) {
+      // no errors so display success message
+      snackbar.value.value = true;
+      snackbar.value.color = "green";
+      snackbar.value.text =
+        "Project and associated repo(s) have been modified.";
+    }
+  }
+
   async function getProjects() {
     await ProjectServices.getProjectsByUserId(user.value.id)
       .then((response) => {
@@ -129,6 +191,38 @@
           error.response?.data?.message || "Failed to fetch projects",
         );
       });
+  }
+
+  async function addRepo(projectId) {
+    if (newRepoInput.value) {
+      // extract repoName from the URL
+      const urlParts = newRepoInput.value.split("/");
+      const repoName = urlParts[urlParts.length - 1]; // repoName is at index 4
+      console.log(repoName);
+
+      // fill in newRepo
+      newRepo.value.name = repoName;
+      newRepo.value.repoUrl = newRepoInput.value;
+      newRepo.value.projectId = projectId;
+
+      console.log("FLAG: NEW REPO VALUE REPOURL: " + newRepoInput.value);
+      // check for correct URL format
+      const match = newRepo.value.repoUrl.match(
+        /^https:\/\/github\.com\/([^\/]+)\/([^\/]+)$/,
+      ); // returns boolean
+
+      if (!match) {
+        throw new Error("Invalid GitHub URL format");
+      }
+
+      try {
+        await RepoServices.addRepo(newRepo.value);
+      } catch (error) {
+        throw new Error(
+          error.response?.data?.message || "Failed to create repo",
+        );
+      }
+    }
   }
 
   async function createProject() {
@@ -171,6 +265,7 @@
         } catch (error) {
           // if there's an error creating repo/validating URL, delete the ProjectService
           await ProjectServices.deleteProject(projectId);
+
           showSnackbar(
             "error",
             error.response?.data?.message ||
@@ -199,6 +294,47 @@
     await getProjects();
   }
 
+  async function updateProject() {
+    await ProjectServices.updateProject(
+      editingProject.value.id,
+      editingProject.value,
+    )
+      .then(() => {
+        console.log("Updated project");
+      })
+      .catch((error) => {
+        console.log("Failed to update project");
+        throw error;
+      });
+    await getProjects();
+  }
+
+  async function updateRepo(repo) {
+    // extract repoName from the URL
+    const urlParts = repo.repoUrl.split("/");
+    const repoName = urlParts[urlParts.length - 1]; // repoName is at index 4
+    console.log(repoName);
+
+    // fill in editingRepo
+    editingRepo.value.id = repo.id;
+    editingRepo.value.name = repoName;
+    editingRepo.value.repoUrl = repo.repoUrl;
+    editingRepo.value.projectId = repo.projectId; // projectId should be the same
+
+    console.log("REPO ID:" + editingRepo.value.name);
+    console.log("REPO NAME:" + editingRepo.value.name);
+    console.log("NEW REPO URL:" + editingRepo.value.repoUrl);
+    console.log("REPO PROJECT ID:" + editingRepo.value.projectId);
+    await RepoServices.updateRepo(editingRepo.value.id, editingRepo.value)
+      .then(() => {
+        console.log("Updated repository");
+      })
+      .catch((error) => {
+        console.log("Failed to update repo");
+        throw error;
+      });
+  }
+
   async function deleteProject(projectId) {
     await ProjectServices.deleteProject(projectId)
       .then(() => {
@@ -211,6 +347,19 @@
         );
       });
     await getProjects();
+  }
+
+  async function deleteRepo(repoId) {
+    await RepoServices.deleteRepo(repoId)
+      .then(() => {
+        showSnackbar("green", "Repo deleted successfully!");
+      })
+      .catch((error) => {
+        showSnackbar(
+          "error",
+          error.response?.data?.message || "Failed to delete repo",
+        );
+      });
   }
 
   function resetProject() {
@@ -228,6 +377,13 @@
 
   function showSnackbar(color, text) {
     snackbar.value = { value: true, color, text };
+  }
+
+  function toggleAddRepo() {
+    // toggle between the "Add repo" button and textfield in the editting project dialog
+    console.log("ADDING REPO VALUE:" + addingRepo.value);
+    newRepoInput.value = "";
+    addingRepo.value = addingRepo.value ? false : true;
   }
 </script>
 
@@ -437,7 +593,7 @@
               variant="outlined"
               density="comfortable"
               rounded="lg"
-              placeholder="org/repo-name"
+              placeholder="https://github.com/owner/repositoryName"
               bg-color="grey-lighten-4"
               class="mb-1"
               hide-details
@@ -618,6 +774,53 @@
                 >
                 </v-text-field>
               </v-col>
+
+              <v-row class="mt-2">
+                <v-col cols="12" class="pl-3">
+                  <!-- iterate by index rather than id or name -->
+                  <!-- index is being increased, repo just gets assigned the item in the editingRepos array -->
+                  <div class="form-label">REPO URL(S)</div>
+                  <div
+                    v-for="(repo, index) in editingRepos"
+                    :key="index"
+                    class="mt-2"
+                  >
+                    <v-text-field
+                      v-model="repo.repoUrl"
+                      variant="outlined"
+                      density="comfortable"
+                      rounded="lg"
+                      bg-color="grey-lighten-4"
+                      hide-details
+                      append-icon="mdi-trash-can"
+                      @click:append="deleteRepo(repo.id)"
+                    ></v-text-field>
+                  </div>
+
+                  <div class="mt-2" v-if="addingRepo">
+                    <v-text-field
+                      v-model="newRepoInput"
+                      placeholder="https://github.com/owner/repositoryName"
+                      variant="outlined"
+                      density="comfortable"
+                      rounded="lg"
+                      bg-color="grey-lighten-4"
+                      append-icon="mdi-cancel"
+                      @click:append="toggleAddRepo()"
+                      hide-details
+                    >
+                    </v-text-field>
+                  </div>
+
+                  <v-icon
+                    v-else
+                    class="mt-3"
+                    size="small"
+                    icon="mdi-plus-circle-outline"
+                    @click="toggleAddRepo()"
+                  ></v-icon>
+                </v-col>
+              </v-row>
             </v-row>
           </v-card-text>
 
@@ -627,7 +830,7 @@
               style="background-color: #9b7d8c"
               variant="flat"
               class="text-white rounded-lg px-6"
-              @click="updateProject"
+              @click="saveChanges()"
             >
               Save Changes
             </v-btn>
