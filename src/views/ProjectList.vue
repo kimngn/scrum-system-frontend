@@ -624,9 +624,9 @@
           <v-card-actions class="px-4 pb-4 justify-end">
             <v-btn variant="text" @click="editDialog = false">Cancel</v-btn>
             <v-btn
-              style="background-color: #9b7d8c"
+              color="primary"
               variant="flat"
-              class="text-white rounded-lg px-6"
+              class="rounded-lg px-6"
               @click="updateProject"
             >
               Save Changes

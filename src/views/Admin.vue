@@ -55,33 +55,6 @@
         </template>
         <ProjectList />
       </Tab>
-      <Tab value="Sprints">
-        <template #icon>
-          <i class="fas fa-cog"></i>
-        </template>
-        <p>Put list of sprints here</p>
-      </Tab>
-
-      <Tab value="Teams">
-        <template #icon>
-          <i class="fas fa-cog"></i>
-        </template>
-        <p>Put list of teams here</p>
-      </Tab>
-
-      <Tab value="User Stories">
-        <template #icon>
-          <i class="fas fa-cog"></i>
-        </template>
-        <p>Put list of user stories here</p>
-      </Tab>
-
-      <Tab value="Acceptance Criterias">
-        <template #icon>
-          <i class="fas fa-cog"></i>
-        </template>
-        <p>Put list of acceptance criterias here</p>
-      </Tab>
     </Tabs>
 
     <v-snackbar v-model="snackbar.value" rounded="pill">

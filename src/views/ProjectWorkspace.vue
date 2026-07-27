@@ -14,6 +14,14 @@ const project = ref(null);
 const members = ref([]);
 const repos = ref([]);
 const sprints = ref([]);
+const sprintDialog = ref(false);
+const sprintForm = ref({
+  id: null,
+  name: "",
+  startDate: null,
+  endDate: null,
+});
+const today = new Date().toISOString().split("T")[0];
 const tab = ref("Summary");
 const newRepoUrl = ref("");
 
@@ -155,6 +163,84 @@ async function loadSprints() {
   sprints.value = Array.isArray(res.data) ? res.data : [];
 }
 
+function sprintStatus(s) {
+  const now = new Date();
+  const start = new Date(s.startDate);
+  const end = new Date(s.endDate);
+  if (now < start) return "Planned";
+  if (now > end) return "Completed";
+  return "Active";
+}
+
+function sprintStatusColor(s) {
+  const status = sprintStatus(s);
+  if (status === "Active") return "success";
+  if (status === "Completed") return "grey";
+  return "warning";
+}
+
+function openSprintDialog(sprint) {
+  if (sprint) {
+    sprintForm.value = {
+      id: sprint.id,
+      name: sprint.name,
+      startDate: sprint.startDate ? sprint.startDate.split("T")[0] : null,
+      endDate: sprint.endDate ? sprint.endDate.split("T")[0] : null,
+    };
+  } else {
+    sprintForm.value = {
+      id: null,
+      name: "",
+      startDate: null,
+      endDate: null,
+    };
+  }
+  sprintDialog.value = true;
+}
+
+async function saveSprint() {
+  const start = sprintForm.value.startDate;
+  const end = sprintForm.value.endDate;
+
+  if (end < start) {
+    window.alert("End date must be on or after the start date.");
+    return;
+  }
+
+  if (!sprintForm.value.id && (start < today || end < today)) {
+    window.alert("New sprints cannot be created with past dates.");
+    return;
+  }
+
+  const payload = {
+    name: sprintForm.value.name,
+    startDate: sprintForm.value.startDate,
+    endDate: sprintForm.value.endDate,
+    projectId,
+  };
+  try {
+    if (sprintForm.value.id) {
+      await SprintServices.updateSprint(sprintForm.value.id, payload);
+    } else {
+      await SprintServices.addSprint(payload);
+    }
+    sprintDialog.value = false;
+    await loadSprints();
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+async function deleteSprint(id) {
+  if (!window.confirm("Are you sure you want to delete this sprint?")) return;
+  try {
+    await SprintServices.deleteSprint(id);
+    await loadSprints();
+  } catch (error) {
+    console.error(error);
+  }
+}
+
 onMounted(async () => {
   await Promise.all([loadProject(), loadMembers(), loadRepos(), loadSprints()]);
 });
@@ -207,6 +293,8 @@ onMounted(async () => {
         <v-tab value="Summary">Summary</v-tab>
         <v-tab value="Sprints">Sprints</v-tab>
         <v-tab value="Team">Teams</v-tab>
+        <v-tab value="User Stories">User Stories</v-tab>
+        <v-tab value="Acceptance Criteria">Acceptance Criteria</v-tab>
         <v-tab value="Repositories">Repositories</v-tab>
         <v-tab value="Activity">Activity</v-tab>
       </v-tabs>
@@ -283,24 +371,71 @@ onMounted(async () => {
       </v-window-item>
 
       <v-window-item value="Sprints">
-        <v-card class="rounded-lg elevation-5 pa-4">
-          <div v-if="sprints.length">
-            <v-list>
-              <v-list-item v-for="s in sprints" :key="s.id">
-                <v-list-item-title>
-                  {{ s.name || `Sprint ${s.id}` }}
-                </v-list-item-title>
-                <v-list-item-subtitle>
-                  {{ formatDate(s.startDate) }} – {{ formatDate(s.endDate) }}
-                </v-list-item-subtitle>
-              </v-list-item>
-            </v-list>
+        <div class="d-flex justify-space-between align-center mb-4">
+          <div class="text-body-1">
+            {{ sprints.length }} sprint{{ sprints.length === 1 ? "" : "s" }} in this project
           </div>
-          <v-alert v-else type="info" variant="tonal">
-            No sprints yet. Sprint creation will be handled in a separate
-            ticket.
-          </v-alert>
-        </v-card>
+          <v-btn
+            color="primary"
+            prepend-icon="mdi-plus"
+            @click="openSprintDialog()"
+          >
+            Add Sprint
+          </v-btn>
+        </div>
+
+        <v-row>
+          <v-col v-for="s in sprints" :key="s.id" cols="12" md="6" lg="4">
+            <v-card class="rounded-lg elevation-2 pa-4">
+              <div class="d-flex justify-space-between align-start">
+                <div>
+                  <div class="text-h6 font-weight-bold">
+                    {{ s.name || `Sprint ${s.id}` }}
+                  </div>
+                  <v-chip
+                    size="small"
+                    :color="sprintStatusColor(s)"
+                    class="mt-2 mb-2"
+                  >
+                    {{ sprintStatus(s) }}
+                  </v-chip>
+                  <div class="text-body-2 text-grey-darken-1">
+                    {{ formatDate(s.startDate) }} – {{ formatDate(s.endDate) }}
+                  </div>
+                </div>
+                <v-menu>
+                  <template v-slot:activator="{ props }">
+                    <v-btn
+                      icon="mdi-dots-vertical"
+                      variant="text"
+                      size="small"
+                      v-bind="props"
+                    ></v-btn>
+                  </template>
+                  <v-list>
+                    <v-list-item @click="openSprintDialog(s)">
+                      <v-list-item-title>Edit</v-list-item-title>
+                    </v-list-item>
+                    <v-list-item @click="deleteSprint(s.id)">
+                      <v-list-item-title class="text-error">
+                        Delete
+                      </v-list-item-title>
+                    </v-list-item>
+                  </v-list>
+                </v-menu>
+              </div>
+            </v-card>
+          </v-col>
+        </v-row>
+
+        <v-alert
+          v-if="sprints.length === 0"
+          type="info"
+          variant="tonal"
+          class="mt-4"
+        >
+          No sprints yet.
+        </v-alert>
       </v-window-item>
 
       <v-window-item value="Team">
@@ -327,6 +462,18 @@ onMounted(async () => {
             </v-list-item>
           </v-list>
         </v-card>
+      </v-window-item>
+
+      <v-window-item value="User Stories">
+        <v-alert type="info" variant="tonal">
+          User stories will be handled in a separate ticket.
+        </v-alert>
+      </v-window-item>
+
+      <v-window-item value="Acceptance Criteria">
+        <v-alert type="info" variant="tonal">
+          Acceptance criteria will be handled in a separate ticket.
+        </v-alert>
       </v-window-item>
 
       <v-window-item value="Repositories">
@@ -470,6 +617,75 @@ onMounted(async () => {
           @click="saveProject"
         >
           Save Changes
+        </v-btn>
+      </v-card-actions>
+    </v-card>
+  </v-dialog>
+
+  <v-dialog v-model="sprintDialog" max-width="550">
+    <v-card class="rounded-xl pa-2">
+      <v-card-title
+        class="d-flex justify-space-between align-center px-4 pt-4 pb-2"
+      >
+        <span class="text-h6 font-weight-bold">
+          {{ sprintForm.id ? "Edit Sprint" : "New Sprint" }}
+        </span>
+        <v-btn icon variant="text" @click="sprintDialog = false">
+          <v-icon>mdi-close</v-icon>
+        </v-btn>
+      </v-card-title>
+
+      <v-card-text class="px-4">
+        <div class="subheader mb-1">SPRINT NAME</div>
+        <v-text-field
+          v-model="sprintForm.name"
+          variant="outlined"
+          density="comfortable"
+          rounded="lg"
+          bg-color="grey-lighten-4"
+          class="mb-1"
+          hide-details
+        ></v-text-field>
+
+        <v-row class="mt-2" no-gutters>
+          <v-col cols="6" class="pr-2">
+            <div class="subheader mb-1">START DATE</div>
+            <v-text-field
+              v-model="sprintForm.startDate"
+              type="date"
+              :min="today"
+              variant="outlined"
+              density="comfortable"
+              rounded="lg"
+              bg-color="grey-lighten-4"
+              hide-details
+            ></v-text-field>
+          </v-col>
+          <v-col cols="6" class="pl-2">
+            <div class="subheader mb-1">END DATE</div>
+            <v-text-field
+              v-model="sprintForm.endDate"
+              type="date"
+              :min="sprintForm.startDate || today"
+              variant="outlined"
+              density="comfortable"
+              rounded="lg"
+              bg-color="grey-lighten-4"
+              hide-details
+            ></v-text-field>
+          </v-col>
+        </v-row>
+      </v-card-text>
+
+      <v-card-actions class="px-4 pb-4 justify-end">
+        <v-btn variant="text" @click="sprintDialog = false">Cancel</v-btn>
+        <v-btn
+          color="primary"
+          variant="flat"
+          class="rounded-lg px-6"
+          @click="saveSprint"
+        >
+          {{ sprintForm.id ? "Save Changes" : "Create Sprint" }}
         </v-btn>
       </v-card-actions>
     </v-card>
