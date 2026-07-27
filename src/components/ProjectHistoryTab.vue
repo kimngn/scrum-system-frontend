@@ -1,12 +1,15 @@
 <script setup>
   import { onMounted } from "vue";
+  import { computed } from "vue";
   import { ref } from "vue";
   import ProjectServices from "../services/ProjectServices.js";
+  import HistoryServices from "../services/HistoryServices.js";
   import ProjectHistoryCard from "./ProjectHistoryCard.vue";
 
   // Variables
   const user = ref(null); // logged in user
-  const projects = ref([]);
+  const projectHistory = ref([]);
+  const projectIds = ref([]);
 
   // Dropdown options
   const roles = ref(["admin", "lead", "member"]);
@@ -19,14 +22,34 @@
   });
 
   onMounted(async () => {
-    await getProjects();
+    await getProjectHistory();
+
+    await getProjectIds();
+    console.log("PROJECT IDs:", projectIds.value);
     user.value = JSON.parse(localStorage.getItem("user"));
   });
 
-  async function getProjects() {
-    await ProjectServices.getProjects()
+  async function getProjectIds() {
+    const ids = []; // could probably also use a set here
+
+    for (var i = 0; i < projectHistory.value.length; ++i) {
+      const action = projectHistory.value[i];
+
+      if (action) {
+        // if action exists
+        if (ids.indexOf(action.entityId) === -1) {
+          // if the value doesn't exist in ids yet, push it in
+          ids.push(action.entityId);
+        }
+      }
+    }
+    projectIds.value = ids;
+  }
+
+  async function getProjectHistory() {
+    await HistoryServices.getProjectHistory()
       .then((response) => {
-        projects.value = response.data;
+        projectHistory.value = response.data;
       })
       .catch((error) => {
         console.log(error);
@@ -48,13 +71,11 @@
         </v-col>
       </v-row>
 
-      <!---->
       <ProjectHistoryCard
-        v-for="project in projects"
-        :key="project.id"
-        :project="project"
+        v-for="projectId in projectIds"
+        :key="projectId"
+        :projectId="projectId"
       />
-      <!---->
     </div>
   </v-container>
 </template>

@@ -6,17 +6,24 @@
 
   // Props
   const props = defineProps({
-    // props don't use value
-    project: {
+    projectId: {
       required: true,
     },
   });
 
-  const projectId = props.project.id;
+  const projectId = props.projectId;
   const projectHistoryDetails = ref(false);
   const projectHistory = ref([]); // user info is already tagged along
 
+  // Styles
+  const createStyle = ref("createStyle");
+
+  const editStyle = ref("editStyle");
+  const deleteStyle = ref("deleteStyle");
+
   onMounted(async () => {
+    console.log("Child:", projectId);
+
     await getProjectHistoryByProjectId();
   });
 
@@ -40,15 +47,10 @@
       <v-card-title class="headline">
         <v-row align="center">
           <v-col cols="10">
-            ID {{ project.id }}: {{ project.name }}
-            <v-chip class="ma-2" color="blue" label>
-              <v-icon start icon="mdi-account-circle"></v-icon>
-              {{ project.status }}
-            </v-chip>
-          </v-col>
+            ID {{ projectId }} - {{ projectHistory[0]?.entityName }}</v-col
+          >
         </v-row>
       </v-card-title>
-
       <v-expand-transition>
         <v-card-text v-show="projectHistoryDetails">
           <div @click.stop>
@@ -56,20 +58,74 @@
               <Tab value="Project Actions">
                 <v-row class="mb-2, mt-2" align="center">
                   <!-- each column takes 1/2 of the row -->
-                  <v-col class="pl-6" cols="6">
-                    <!-- padding left: 4px -->
-
+                  <v-col class="pl-6" cols="12">
                     <ul>
                       <li class="mb-5" v-for="item in projectHistory">
-                        <b class="mr-2"> {{ item.action }} </b>
-
-                        {{ item.createdAt }}
-
-                        <br />
-
-                        Changed {{ item.fieldName }} from {{ item.oldValue }} to
-                        {{ item.newValue }} by {{ item.user.firstName }}
-                        {{ item.user.lastName }}.
+                        <!-- CREATE -->
+                        <template v-if="item.action === 'create'">
+                          <v-icon
+                            class="mx-2"
+                            size="x-small"
+                            icon="mdi-plus-outline"
+                          ></v-icon
+                          ><b class="mr-2 createStyle">
+                            Created {{ item.entityType }}</b
+                          >
+                          {{ item.createdAt }}
+                          <br />
+                          <div class="ml-8">
+                            {{
+                              item.entityType.charAt(0).toUpperCase() +
+                              item.entityType.slice(1)
+                            }}
+                            {{ item.entityId }} was created by
+                            {{ item.user.firstName }} {{ item.user.lastName }}.
+                          </div>
+                        </template>
+                        <!-- EDIT -->
+                        <template v-else-if="item.action === 'edit'">
+                          <v-icon
+                            class="mx-2"
+                            size="x-small"
+                            icon="mdi-pencil"
+                          ></v-icon
+                          ><b class="mr-2 editStyle">
+                            Modified {{ item.entityType }}
+                          </b>
+                          {{ item.createdAt }}
+                          <br />
+                          <div class="ml-8">
+                            {{
+                              item.entityType.charAt(0).toUpperCase() +
+                              item.entityType.slice(1)
+                            }}
+                            {{ item.entityId }}
+                            had the field {{ item.fieldName }} changed from
+                            {{ item.oldValue }} to {{ item.newValue }} by
+                            {{ item.user.firstName }} {{ item.user.lastName }}.
+                          </div>
+                        </template>
+                        <!-- DELETE -->
+                        <template v-else>
+                          <v-icon
+                            class="mx-2"
+                            size="x-small"
+                            icon="mdi-trash-can"
+                          ></v-icon
+                          ><b class="mr-2 deleteStyle">
+                            Deleted {{ item.entityType }}
+                          </b>
+                          {{ item.createdAt }}
+                          <br />
+                          <div class="ml-8">
+                            {{
+                              item.entityType.charAt(0).toUpperCase() +
+                              item.entityType.slice(1)
+                            }}
+                            {{ item.entityId }} was deleted by
+                            {{ item.user.firstName }} {{ item.user.lastName }}.
+                          </div>
+                        </template>
                       </li>
                     </ul>
                   </v-col>
@@ -83,3 +139,16 @@
     </v-card>
   </v-container>
 </template>
+
+<style>
+  .createStyle {
+    color: rgb(0, 147, 34);
+  }
+  .editStyle {
+    color: rgb(31, 128, 214);
+  }
+
+  .deleteStyle {
+    color: rgb(250, 28, 28);
+  }
+</style>

@@ -4,6 +4,7 @@
   import ProjectServices from "../services/ProjectServices.js";
   import RepoServices from "../services/RepoServices.js";
   import UserServices from "../services/UserServices.js";
+  import HistoryServices from "../services/HistoryServices.js";
   import ProjectMembershipServices from "../services/ProjectMembershipServices.js";
   import Repo from "../components/Repo.vue";
 
@@ -24,6 +25,10 @@
     repoUrl: "",
   });
 
+  const beforeChanges = ref({});
+
+  // for project history log
+  const newAction = ref({});
   const newRepo = ref({
     name: undefined,
     repoUrl: undefined,
@@ -77,16 +82,43 @@
       startDate: p.startDate ? p.startDate.split("T")[0] : null,
       endDate: p.endDate ? p.endDate.split("T")[0] : null,
     };
+
+    beforeChanges.value = JSON.parse(JSON.stringify(editingProject.value));
+
     editDialog.value = true;
   }
 
   async function updateProject() {
+    console.log("Project: " + editingProject.value.name);
+    console.log("Project: " + editingProject.value.description);
+    console.log("Project: " + editingProject.value.status);
     await ProjectServices.updateProject(
       editingProject.value.id,
       editingProject.value,
     )
       .then(() => {
         showSnackbar("green", "Project updated successfully!");
+
+        newAction.value.action = "edit";
+        newAction.value.userId = user.value.id;
+        newAction.value.entityName = editingProject.value.name;
+        newAction.value.entityId = editingProject.value.id;
+        newAction.value.entityType = "project";
+
+        const oldProject = beforeChanges.value;
+        const newProject = editingProject.value;
+        // compare project before and after modifications
+        for (const attribute in newProject) {
+          if (oldProject[attribute] !== newProject[attribute]) {
+            newAction.value.fieldName = attribute;
+            newAction.value.oldValue = oldProject[attribute];
+            newAction.value.newValue = newProject[attribute];
+
+            console.log(newAction.value);
+            recordAction();
+          }
+        }
+
         editDialog.value = false;
       })
       .catch((error) => {
@@ -119,7 +151,7 @@
   });
 
   async function getProjects() {
-    await ProjectServices.getProjectsByUserId(user.value.id)
+    await ProjectServices.getProjects()
       .then((response) => {
         projects.value = response.data;
       })
@@ -139,7 +171,8 @@
         userId: user.value.id,
       });
       const projectId = response.data.id;
-      console.log("PROJECT.VALUE HAS : " + project.value.repoUrl);
+      const projectName = response.data.name;
+      console.log("RESPONDED WITH PROJECT: " + projectId);
       if (project.value.repoUrl) {
         try {
           // extract repoName from the URL
@@ -186,6 +219,14 @@
           role: m.role,
         });
       }
+      newAction.value.action = "create";
+      newAction.value.userId = user.value.id;
+      newAction.value.entityName = projectName;
+      newAction.value.entityId = projectId;
+      newAction.value.entityType = "project";
+
+      recordAction();
+
       showSnackbar("green", "Project created successfully!");
       dialog.value = false;
       resetProject();
@@ -199,10 +240,21 @@
     await getProjects();
   }
 
-  async function deleteProject(projectId) {
+  async function deleteProject(projectId, projectName) {
+    newAction.value.entityId = projectId; // grab this before project gets deleted
+    newAction.value.entityName = projectName; // grab this before project gets deleted
     await ProjectServices.deleteProject(projectId)
       .then(() => {
         showSnackbar("green", "Project deleted successfully!");
+
+        console.log("Project deleted");
+
+        newAction.value.action = "delete";
+        newAction.value.userId = user.value.id;
+        newAction.value.entityType = "project";
+
+        console.log("Record action!");
+        recordAction();
       })
       .catch((error) => {
         showSnackbar(
@@ -224,6 +276,16 @@
     };
     selectedMembers.value = [];
     memberSearch.value = "";
+  }
+
+  async function recordAction() {
+    await HistoryServices.addHistory(newAction.value)
+      .then(() => {
+        console.log("Action recorded!");
+      })
+      .catch((error) => {
+        console.log("Failed to record action! Error: " + error.message);
+      });
   }
 
   function showSnackbar(color, text) {
@@ -295,7 +357,6 @@
               <v-col class="pl-6" cols="6">
                 <v-row class="mt-3 subheader">REPOS</v-row>
                 <v-row>
-                  <!-- todo: put repositories component here -->
                   <Repo :projectId="p.id" />
                 </v-row>
               </v-col>
@@ -309,7 +370,7 @@
               </v-col>
               <v-col cols="2">
                 <button
-                  @click.stop="deleteProject(p.id)"
+                  @click.stop="deleteProject(p.id, p.name)"
                   class="deleteButtonStyle"
                 >
                   Delete
