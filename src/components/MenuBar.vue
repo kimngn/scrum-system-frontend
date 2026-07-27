@@ -46,16 +46,6 @@
       </v-toolbar-title>
       <v-spacer></v-spacer>
 
-      <!-- admins -->
-      <v-btn
-        v-if="user && user.role === 'admin'"
-        class="mx-2"
-        :to="{ name: 'systemlogs' }"
-      >
-        System Logs</v-btn
-      >
-
-      <!-- members -->
       <v-btn
         v-if="user === null || user.role === 'member'"
         class="mx-2"

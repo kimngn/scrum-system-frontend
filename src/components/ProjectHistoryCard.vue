@@ -78,7 +78,7 @@
                               item.entityType.charAt(0).toUpperCase() +
                               item.entityType.slice(1)
                             }}
-                            {{ item.entityId }} was created by
+                            {{ item.entityName }} was created by
                             {{ item.user.firstName }} {{ item.user.lastName }}.
                           </div>
                         </template>
@@ -99,8 +99,8 @@
                               item.entityType.charAt(0).toUpperCase() +
                               item.entityType.slice(1)
                             }}
-                            {{ item.entityId }}
-                            had the field {{ item.fieldName }} changed from
+                            {{ item.entityName }}
+                            had the {{ item.fieldName }} changed from
                             {{ item.oldValue }} to {{ item.newValue }} by
                             {{ item.user.firstName }} {{ item.user.lastName }}.
                           </div>
@@ -122,7 +122,7 @@
                               item.entityType.charAt(0).toUpperCase() +
                               item.entityType.slice(1)
                             }}
-                            {{ item.entityId }} was deleted by
+                            {{ item.entityName }} was deleted by
                             {{ item.user.firstName }} {{ item.user.lastName }}.
                           </div>
                         </template>
