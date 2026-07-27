@@ -4,6 +4,7 @@ import { useRouter } from "vue-router";
 import StoryboardServices from "../services/StoryboardServices.js";
 import ProjectServices from "../services/ProjectServices.js";
 import ProjectMembershipServices from "../services/ProjectMembershipServices.js";
+import StoryAssigneeServices from "../services/StoryAssigneeServices.js";
 
 // Column ids to match the seeded columns in the backend.
 const columnDefinitions = [
@@ -43,7 +44,10 @@ const formPriority = ref("Medium");
 const formStoryPoint = ref(null);
 // Users assigned to the project, shown in the assignee dropdown.
 const assigneeOptions = ref([]);
+// Ids for the users selected in assignee dropdown.
 const formAssignee = ref([]);
+// Ids of the story's current assignee rows when editing.
+const editingAssigneeIds = ref([]);
 
 onMounted(async () => {
   // Gets the logged in user from local storage.
@@ -154,14 +158,17 @@ function getPriorityColor(priority) {
 
 // Opens the dialog empty.
 function openCreateDialog(columnId) {
+  // Clears values for the form.
   isEditing.value = false;
   editingStoryId.value = null;
+  // Saves columnId.
   selectedColumnId.value = columnId;
   formTitle.value = "";
   formDescription.value = "";
   formPriority.value = "";
   formStoryPoint.value = null;
   formAssignee.value = [];
+  editingAssigneeIds.value = [];
   showDialog.value = true;
 }
 
@@ -174,12 +181,23 @@ function openEditDialog(story) {
   formDescription.value = story.description;
   formPriority.value = story.priority;
   formStoryPoint.value = story.storyPoint;
-  formAssignee.value = [];
+
+  const userIds = [];
+  const assigneeIds = [];
+  // Loads the story's currentassignees into the form.
+  for (let i = 0; i < story.assignee.length; i++) {
+    userIds.push(story.assignee[i].user.id);
+    assigneeIds.push(story.assignee[i].id);
+  }
+  // Select current user and save the assignee row ids.
+  formAssignee.value = userIds;
+  editingAssigneeIds.value = assigneeIds;
+
   showDialog.value = true;
 }
 
 // Save story being dragged.
-async function startDrag(story){
+  function startDrag(story){
   draggedStory.value = story;
 }
 
@@ -241,13 +259,34 @@ async function saveStory() {
     projectId: projectId.value,
     columnId: selectedColumnId.value,
   };
+  // Get storyId.
+  let storyId = editingStoryId.value;
 
   if (isEditing.value) {
-    await StoryboardServices.updateStory(editingStoryId.value, story);
+    // Updates the existing story.
+    await StoryboardServices.updateStory(storyId, story);
+
+    // Deletes the story's old assignee records.
+    for (let i = 0; i < editingAssigneeIds.value.length; i++) {
+      await StoryAssigneeServices.deleteAssignee(
+        editingAssigneeIds.value[i],
+      );
+    }
   } else {
-    await StoryboardServices.createStory(story);
+    // Creates the new story and saves its id.
+    const response = await StoryboardServices.createStory(story);
+    storyId = response.data.id;
   }
 
+  // Adds the currently selected assignees.
+  for (let i = 0; i < formAssignee.value.length; i++) {
+    await StoryAssigneeServices.addAssignee({
+      userStoryId: storyId,
+      userId: formAssignee.value[i],
+    });
+  }
+
+  // Refreshes the board and closes the dialog.
   await getStories();
   showDialog.value = false;
 }
@@ -359,11 +398,22 @@ async function deleteStory() {
             <div class="text-caption text-medium-emphasis mt-1">
               {{ story.description }}
             </div>
-
-            <div class="mt-2" v-if="story.storyPoint !== null">
+          <div class="d-flex align-center justify-space-between mt-2">
+            <!-- Shows assignees on the card. -->
+            <div v-if="story.assignee.length > 0">
+              <v-chip
+                v-for="assignee in story.assignee" :key="assignee.id"
+                size="small"
+              >
+                {{ assignee.user.firstName }} {{ assignee.user.lastName }}
+              </v-chip>
+            </div>
+            
+            <div v-if="story.storyPoint !== null">
               <v-chip size="small" variant="outlined">
                 {{ story.storyPoint }} pts
               </v-chip>
+            </div>
             </div>
           </v-card-text>
         </v-card>
