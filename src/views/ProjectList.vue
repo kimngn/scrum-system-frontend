@@ -99,7 +99,7 @@
     RepoServices.getReposByProjectId(p.id)
       .then((response) => {
         editingRepos.value = response.data; // store existing repos for a specific project into an array ref
-  })
+      })
       .catch((error) => {
         console.log(error);
       });
@@ -348,21 +348,6 @@
     await getProjects();
   }
 
-  async function updateProject() {
-    await ProjectServices.updateProject(
-      editingProject.value.id,
-      editingProject.value,
-    )
-      .then(() => {
-        console.log("Updated project");
-      })
-      .catch((error) => {
-        console.log("Failed to update project");
-        throw error;
-      });
-    await getProjects();
-  }
-
   async function updateRepo(repo) {
     // extract repoName from the URL
     const urlParts = repo.repoUrl.split("/");
@@ -388,7 +373,7 @@
         throw error;
       });
   }
-    
+
   async function deleteProject(projectId, projectName) {
     newAction.value.entityId = projectId; // grab this before project gets deleted
     newAction.value.entityName = projectName; // grab this before project gets deleted
