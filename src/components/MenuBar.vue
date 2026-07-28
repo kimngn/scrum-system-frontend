@@ -51,10 +51,18 @@
       <v-btn v-if="user === null" class="mx-2" :to="{ name: 'login' }">
         Login
       </v-btn>
-      <v-btn v-if="user !== null && user.role === 'member'" class="mx-2" :to="{ name: 'storyboard' }">
+      <v-btn
+        v-if="user !== null && user.role === 'member'"
+        class="mx-2"
+        :to="{ name: 'storyboard' }"
+      >
         Storyboard
       </v-btn>
-      <v-btn v-if="user !== null && user.role === 'member'" class="mx-2" :to="{ name: 'backlogs' }">
+      <v-btn
+        v-if="user !== null && user.role === 'member'"
+        class="mx-2"
+        :to="{ name: 'backlogs' }"
+      >
         Backlogs
       </v-btn>
       <v-btn v-if="user !== null && (user.role === 'admin' || user.role === 'lead')" class="mx-2" :to="{ name: 'admin' }">
