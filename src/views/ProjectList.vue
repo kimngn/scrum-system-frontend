@@ -19,6 +19,8 @@
   const memberSearch = ref("");
   const addingRepo = ref(false); // for adding a new repo in the Editing dialog
   const newRepoInput = ref(""); // for adding a new repoUrl in the Editing dialog
+  const projectRepos = ref([]); // the list of repos being put into Repo component
+
   const project = ref({
     name: "",
     description: "",
@@ -26,6 +28,7 @@
     startDate: null,
     endDate: null,
     repoUrl: "",
+    repos: [],
   });
 
   const beforeChanges = ref({});
@@ -62,8 +65,11 @@
   });
 
   const expandedProjects = ref({});
-  function toggleProject(id) {
-    expandedProjects.value[id] = !expandedProjects.value[id];
+
+  async function toggleProject(p) {
+    expandedProjects.value[p.id] = !expandedProjects.value[p.id];
+    const response = await RepoServices.getReposByProjectId(p.id);
+    projectRepos.value = response.data;
   }
 
   const editDialog = ref(false);
@@ -111,23 +117,29 @@
       status: p.status,
       startDate: p.startDate ? p.startDate.split("T")[0] : null,
       endDate: p.endDate ? p.endDate.split("T")[0] : null,
+      repos: [], // safe copy
     };
     beforeChanges.value = JSON.parse(JSON.stringify(editingProject.value));
     RepoServices.getReposByProjectId(p.id)
       .then((response) => {
         editingRepos.value = response.data; // store existing repos for a specific project into an array ref
+        projectRepos.value = response.data;
       })
       .catch((error) => {
         console.log(error);
       });
     try {
-      const res = await ProjectMembershipServices.getMembershipsByProjectId(p.id);
-      editingMembers.value = (Array.isArray(res.data) ? res.data : []).map((m) => ({
-        id: m.id,
-        user: m.user,
-        role: m.role,
-        isNew: false,
-      }));
+      const res = await ProjectMembershipServices.getMembershipsByProjectId(
+        p.id,
+      );
+      editingMembers.value = (Array.isArray(res.data) ? res.data : []).map(
+        (m) => ({
+          id: m.id,
+          user: m.user,
+          role: m.role,
+          isNew: false,
+        }),
+      );
     } catch (err) {
       editingMembers.value = [];
     }
@@ -211,7 +223,11 @@
   });
 
   async function saveChanges() {
-    if (editingProject.value.startDate && editingProject.value.endDate && editingProject.value.endDate <= editingProject.value.startDate) {
+    if (
+      editingProject.value.startDate &&
+      editingProject.value.endDate &&
+      editingProject.value.endDate <= editingProject.value.startDate
+    ) {
       showSnackbar("error", "End date must be after start date.");
       return;
     }
@@ -222,6 +238,10 @@
     const projectId = editingProject.value.id;
 
     try {
+      if (!Array.isArray(editingRepos.value)) {
+        // sometimes there are no repos, thus nothing to iterate
+        editingRepos.value = [];
+      }
       for (const repo of editingRepos.value) {
         // check repo URL format
         const match = repo.repoUrl.match(
@@ -240,7 +260,7 @@
       }
       // addRepo if updating repo is successful
       try {
-        await addRepo(projectId);
+        await addRepo(editingProject.value);
       } catch (error) {
         console.log(error);
         snackbar.value.value = true;
@@ -267,7 +287,7 @@
       console.log(error);
       snackbar.value.value = true;
       snackbar.value.color = "error";
-      snackbar.value.text = error.response.data.message;
+      snackbar.value.text = error?.response?.data.message;
       hasError = true;
     }
     // no errors = no need to keep the dialog open
@@ -282,7 +302,13 @@
       snackbar.value.color = "green";
       snackbar.value.text =
         "Project and associated repo(s) have been modified.";
+
+      console.log("Project Repos!:" + projectRepos.value[0]);
+      const response = await RepoServices.getReposByProjectId(projectId); // refresh repos
+      projectRepos.value = response.data;
     }
+
+    await getProjects();
   }
 
   async function getProjects() {
@@ -291,8 +317,14 @@
         ? ProjectServices.getProjectsByUserId(user.value.id)
         : ProjectServices.getProjects();
     await call
-      .then((response) => {
+      .then(async (response) => {
         projects.value = response.data;
+
+        // fetch repos for each project by projectId
+        for (const p of projects.value) {
+          const repos = await RepoServices.getReposByProjectId(p.id);
+          projectRepos.value = repos.data;
+        }
       })
       .catch((error) => {
         showSnackbar(
@@ -302,7 +334,7 @@
       });
   }
 
-  async function addRepo(projectId) {
+  async function addRepo(editingProject) {
     if (newRepoInput.value) {
       // extract repoName from the URL
       const urlParts = newRepoInput.value.split("/");
@@ -312,9 +344,9 @@
       // fill in newRepo
       newRepo.value.name = repoName;
       newRepo.value.repoUrl = newRepoInput.value;
-      newRepo.value.projectId = projectId;
+      newRepo.value.projectId = editingProject.id;
 
-      console.log("FLAG: NEW REPO VALUE REPOURL: " + newRepoInput.value);
+      console.log("FLAG new Repo PROJECT ID:" + editingProject.id);
       // check for correct URL format
       const match = newRepo.value.repoUrl.match(
         /^https:\/\/github\.com\/([^\/]+)\/([^\/]+)$/,
@@ -326,6 +358,16 @@
 
       try {
         await RepoServices.addRepo(newRepo.value);
+        newAction.value.action = "create";
+        newAction.value.userId = user.value.id;
+        newAction.value.entityName = newRepo.value.name;
+        newAction.value.entityId = editingProject.id;
+        newAction.value.entityType = "repo";
+        recordAction();
+        // editingProject.repos.push(newRepo.value);
+
+        console.log("PROJCET REPOS: " + project.value[0]?.repos);
+        // find project associated with projectId
       } catch (error) {
         throw new Error(
           error.response?.data?.message || "Failed to create repo",
@@ -339,7 +381,11 @@
       showSnackbar("error", "Start date cannot be in the past.");
       return;
     }
-    if (project.value.startDate && project.value.endDate && project.value.endDate <= project.value.startDate) {
+    if (
+      project.value.startDate &&
+      project.value.endDate &&
+      project.value.endDate <= project.value.startDate
+    ) {
       showSnackbar("error", "End date must be after start date.");
       return;
     }
@@ -439,6 +485,16 @@
     await RepoServices.updateRepo(editingRepo.value.id, editingRepo.value)
       .then(() => {
         console.log("Updated repository");
+
+        newAction.value.action = "edit";
+        newAction.value.userId = user.value.id;
+        newAction.value.entityName = newRepo.value.name;
+        newAction.value.entityId = repo.projectId;
+        newAction.value.entityType = "repo";
+        newAction.value.oldValue = repo.repoUrl;
+        newAction.value.newValue = editingRepo.value.repoUrl;
+        newAction.value.fieldName = "URL";
+        recordAction();
       })
       .catch((error) => {
         console.log("Failed to update repo");
@@ -460,6 +516,7 @@
         newAction.value.entityType = "project";
 
         console.log("Record action!");
+
         recordAction();
       })
       .catch((error) => {
@@ -471,10 +528,17 @@
     await getProjects();
   }
 
-  async function deleteRepo(repoId) {
-    await RepoServices.deleteRepo(repoId)
+  async function deleteRepo(repo, projectId) {
+    newAction.value.entityId = projectId; // grab this before project gets deleted
+    await RepoServices.deleteRepo(repo.id)
       .then(() => {
         showSnackbar("green", "Repo deleted successfully!");
+
+        newAction.value.action = "delete";
+        newAction.value.userId = user.value.id;
+        newAction.value.entityType = "repo";
+
+        recordAction();
       })
       .catch((error) => {
         showSnackbar(
@@ -482,6 +546,15 @@
           error.response?.data?.message || "Failed to delete repo",
         );
       });
+
+    // fixes the bug where ALL repos get deleted (visually, not actually)
+    const response = await RepoServices.getReposByProjectId(projectId);
+    editingRepos.value = response.data;
+  }
+
+  async function selectProject(p) {
+    const response = await RepoServices.getReposByProjectId(p.id);
+    projectRepos.value = response.data;
   }
 
   function resetProject() {
@@ -542,7 +615,7 @@
         v-for="p in projects"
         :key="p.id"
         class="rounded-lg elevation-5 mb-4"
-        @click="toggleProject(p.id)"
+        @click="toggleProject(p)"
       >
         <v-card-title class="headline">
           <v-row align="center">
@@ -587,7 +660,8 @@
               <v-col class="pl-6" cols="6">
                 <v-row class="mt-3 subheader">REPOS</v-row>
                 <v-row>
-                  <Repo :projectId="p.id" />
+                  <!-- todo: put repositories component here -->
+                  <Repo :repos="projectRepos" />
                 </v-row>
               </v-col>
             </v-row>
@@ -927,7 +1001,7 @@
                       bg-color="grey-lighten-4"
                       hide-details
                       append-icon="mdi-trash-can"
-                      @click:append="deleteRepo(repo.id)"
+                      @click:append="deleteRepo(repo, editingProject.id)"
                     ></v-text-field>
                   </div>
 
@@ -959,10 +1033,17 @@
 
             <v-row class="mt-2">
               <v-col cols="12" class="pl-3">
-                <div class="form-label d-flex justify-space-between align-center">
+                <div
+                  class="form-label d-flex justify-space-between align-center"
+                >
                   <span>MEMBERS</span>
-                  <span v-if="editingMembers.length" class="text-caption text-grey-darken-1">
-                    {{ editingMembers.length }} member{{ editingMembers.length > 1 ? "s" : "" }}
+                  <span
+                    v-if="editingMembers.length"
+                    class="text-caption text-grey-darken-1"
+                  >
+                    {{ editingMembers.length }} member{{
+                      editingMembers.length > 1 ? "s" : ""
+                    }}
                   </span>
                 </div>
 
@@ -972,8 +1053,12 @@
                   class="d-flex align-center mb-2 pa-2 rounded-lg mt-2"
                   style="background: #f5f5f5"
                 >
-                  <div class="member-avatar mr-3">{{ getInitials(m.user) }}</div>
-                  <span class="flex-grow-1 text-body-2">{{ m.user.firstName }} {{ m.user.lastName }}</span>
+                  <div class="member-avatar mr-3">
+                    {{ getInitials(m.user) }}
+                  </div>
+                  <span class="flex-grow-1 text-body-2"
+                    >{{ m.user.firstName }} {{ m.user.lastName }}</span
+                  >
                   <v-select
                     v-model="m.role"
                     :items="['lead', 'member']"
@@ -984,7 +1069,12 @@
                     style="max-width: 145px"
                     class="mr-2"
                   />
-                  <v-btn icon variant="text" size="small" @click="removeEditMember(i)">
+                  <v-btn
+                    icon
+                    variant="text"
+                    size="small"
+                    @click="removeEditMember(i)"
+                  >
                     <v-icon size="18">mdi-close</v-icon>
                   </v-btn>
                 </div>
@@ -1000,7 +1090,11 @@
                   hide-details
                 />
 
-                <v-card v-if="filteredEditUsers.length" class="mt-1 rounded-lg" elevation="3">
+                <v-card
+                  v-if="filteredEditUsers.length"
+                  class="mt-1 rounded-lg"
+                  elevation="3"
+                >
                   <v-list density="compact">
                     <v-list-item
                       v-for="u in filteredEditUsers"
@@ -1009,9 +1103,13 @@
                       style="cursor: pointer"
                     >
                       <template #prepend>
-                        <div class="member-avatar mr-3">{{ getInitials(u) }}</div>
+                        <div class="member-avatar mr-3">
+                          {{ getInitials(u) }}
+                        </div>
                       </template>
-                      <v-list-item-title>{{ u.firstName }} {{ u.lastName }}</v-list-item-title>
+                      <v-list-item-title
+                        >{{ u.firstName }} {{ u.lastName }}</v-list-item-title
+                      >
                       <v-list-item-subtitle>{{ u.email }}</v-list-item-subtitle>
                     </v-list-item>
                   </v-list>

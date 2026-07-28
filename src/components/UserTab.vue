@@ -39,7 +39,7 @@
   });
 
   async function getUsers() {
-    console.log("LOGGED IN USER" + loggedInUser.value);
+    console.log("getUsers called");
     await UserServices.getUsers()
       .then((response) => {
         users.value = response.data;
@@ -53,12 +53,12 @@
   }
 
   async function addUser() {
-    isAdd.value = false; // what is this for?
     await UserServices.addUser(newUser.value)
       .then(() => {
         snackbar.value.value = true;
         snackbar.value.color = "green";
         snackbar.value.text = `${newUser.value.firstName} ${newUser.value.lastName} added successfully!`;
+        isAdd.value = false;
       })
       .catch((error) => {
         console.log(error);
@@ -66,6 +66,8 @@
         snackbar.value.color = "error";
         snackbar.value.text = error.response.data.message;
       });
+
+    await getUsers();
   }
 
   function openAdd() {
@@ -102,7 +104,12 @@
       </v-row>
 
       <!---->
-      <UserCard v-for="user in users" :key="user.id" :user="user" @refresh="getUsers" />
+      <UserCard
+        v-for="user in users"
+        :key="user.id"
+        :user="user"
+        @refresh="getUsers"
+      />
       <!---->
 
       <v-dialog persistent v-model="isAdd" width="800">
