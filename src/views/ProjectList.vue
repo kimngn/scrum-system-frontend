@@ -9,6 +9,7 @@
   import Repo from "../components/Repo.vue";
 
   const router = useRouter();
+  const today = new Date().toISOString().split("T")[0];
   const projects = ref([]);
   const user = ref(null);
   const snackbar = ref({ value: false, color: "", text: "" });
@@ -77,6 +78,22 @@
   });
 
   const editingRepos = ref([]); // there can be more than one repo per project. Fetches existing repos for a specific project
+  const editingMembers = ref([]);
+  const removedMembershipIds = ref([]);
+  const editMemberSearch = ref("");
+
+  const filteredEditUsers = computed(() => {
+    if (!editMemberSearch.value) return [];
+    const q = editMemberSearch.value.toLowerCase();
+    return allUsers.value.filter(
+      (u) =>
+        u.id !== user.value?.id &&
+        u.role !== "admin" &&
+        !editingMembers.value.find((m) => m.user.id === u.id) &&
+        (`${u.firstName} ${u.lastName}`.toLowerCase().includes(q) ||
+          u.email.toLowerCase().includes(q)),
+    );
+  });
 
   const editingRepo = ref({
     // the repo being modified and to be sent to the database
@@ -86,7 +103,7 @@
     projectId: null,
   });
 
-  function openEdit(p) {
+  async function openEdit(p) {
     editingProject.value = {
       id: p.id,
       name: p.name,
@@ -103,6 +120,25 @@
       .catch((error) => {
         console.log(error);
       });
+    try {
+      const res = await ProjectMembershipServices.getMembershipsByProjectId(p.id);
+      editingMembers.value = (Array.isArray(res.data) ? res.data : []).map((m) => ({
+        id: m.id,
+        user: m.user,
+        role: m.role,
+        isNew: false,
+      }));
+    } catch (err) {
+      editingMembers.value = [];
+    }
+    if (allUsers.value.length === 0) {
+      try {
+        const res = await UserServices.getAllUsers();
+        allUsers.value = res.data;
+      } catch (err) {}
+    }
+    removedMembershipIds.value = [];
+    editMemberSearch.value = "";
     editDialog.value = true;
   }
 
@@ -155,6 +191,15 @@
   function removeMember(i) {
     selectedMembers.value.splice(i, 1);
   }
+  function addEditMember(u) {
+    editingMembers.value.push({ user: u, role: "member", isNew: true });
+    editMemberSearch.value = "";
+  }
+  function removeEditMember(i) {
+    const m = editingMembers.value[i];
+    if (m.id) removedMembershipIds.value.push(m.id);
+    editingMembers.value.splice(i, 1);
+  }
 
   onMounted(async () => {
     user.value = JSON.parse(localStorage.getItem("user"));
@@ -166,6 +211,10 @@
   });
 
   async function saveChanges() {
+    if (editingProject.value.startDate && editingProject.value.endDate && editingProject.value.endDate <= editingProject.value.startDate) {
+      showSnackbar("error", "End date must be after start date.");
+      return;
+    }
     // call updateRepo, addRepo, and updateProject all at once when Save Changes button is clicked
     console.log("Editing project:" + editingProject.value.id);
     let hasError = false; // false by default, if errors are found along the way, toggled to true
@@ -203,6 +252,17 @@
       // updateProject if updating and adding repo is successful
       await updateProject();
       console.log("Update project success!");
+      for (const id of removedMembershipIds.value) {
+        await ProjectMembershipServices.deleteMembership(id);
+      }
+      for (const m of editingMembers.value.filter((m) => m.isNew)) {
+        await ProjectMembershipServices.addMembership({
+          userId: m.user.id,
+          projectId,
+          role: m.role,
+        });
+      }
+      removedMembershipIds.value = [];
     } catch (error) {
       console.log(error);
       snackbar.value.value = true;
@@ -226,7 +286,11 @@
   }
 
   async function getProjects() {
-    await ProjectServices.getProjects()
+    const call =
+      user.value?.role === "member"
+        ? ProjectServices.getProjectsByUserId(user.value.id)
+        : ProjectServices.getProjects();
+    await call
       .then((response) => {
         projects.value = response.data;
       })
@@ -271,6 +335,14 @@
   }
 
   async function createProject() {
+    if (project.value.startDate && project.value.startDate < today) {
+      showSnackbar("error", "Start date cannot be in the past.");
+      return;
+    }
+    if (project.value.startDate && project.value.endDate && project.value.endDate <= project.value.startDate) {
+      showSnackbar("error", "End date must be after start date.");
+      return;
+    }
     try {
       // create project and get projectId from response
       const response = await ProjectServices.addProject({
@@ -537,7 +609,7 @@
                   Delete
                 </button>
               </v-col>
-              <v-col cols="auto">
+              <v-col v-if="user && user.role !== 'member'" cols="auto">
                 <v-btn
                   color="primary"
                   @click.stop="
@@ -625,6 +697,7 @@
                 <v-text-field
                   v-model="project.startDate"
                   type="date"
+                  :min="today"
                   variant="outlined"
                   density="comfortable"
                   rounded="lg"
@@ -637,6 +710,7 @@
                 <v-text-field
                   v-model="project.endDate"
                   type="date"
+                  :min="project.startDate || undefined"
                   variant="outlined"
                   density="comfortable"
                   rounded="lg"
@@ -825,6 +899,7 @@
                 <v-text-field
                   v-model="editingProject.endDate"
                   type="date"
+                  :min="editingProject.startDate || undefined"
                   variant="outlined"
                   density="comfortable"
                   rounded="lg"
@@ -881,12 +956,74 @@
                 </v-col>
               </v-row>
             </v-row>
+
+            <v-row class="mt-2">
+              <v-col cols="12" class="pl-3">
+                <div class="form-label d-flex justify-space-between align-center">
+                  <span>MEMBERS</span>
+                  <span v-if="editingMembers.length" class="text-caption text-grey-darken-1">
+                    {{ editingMembers.length }} member{{ editingMembers.length > 1 ? "s" : "" }}
+                  </span>
+                </div>
+
+                <div
+                  v-for="(m, i) in editingMembers"
+                  :key="m.user.id"
+                  class="d-flex align-center mb-2 pa-2 rounded-lg mt-2"
+                  style="background: #f5f5f5"
+                >
+                  <div class="member-avatar mr-3">{{ getInitials(m.user) }}</div>
+                  <span class="flex-grow-1 text-body-2">{{ m.user.firstName }} {{ m.user.lastName }}</span>
+                  <v-select
+                    v-model="m.role"
+                    :items="['lead', 'member']"
+                    variant="outlined"
+                    density="compact"
+                    rounded="lg"
+                    hide-details
+                    style="max-width: 145px"
+                    class="mr-2"
+                  />
+                  <v-btn icon variant="text" size="small" @click="removeEditMember(i)">
+                    <v-icon size="18">mdi-close</v-icon>
+                  </v-btn>
+                </div>
+
+                <v-text-field
+                  v-model="editMemberSearch"
+                  variant="outlined"
+                  density="comfortable"
+                  rounded="lg"
+                  placeholder="Search by name or email..."
+                  bg-color="grey-lighten-4"
+                  class="mt-2 mb-1"
+                  hide-details
+                />
+
+                <v-card v-if="filteredEditUsers.length" class="mt-1 rounded-lg" elevation="3">
+                  <v-list density="compact">
+                    <v-list-item
+                      v-for="u in filteredEditUsers"
+                      :key="u.id"
+                      @click="addEditMember(u)"
+                      style="cursor: pointer"
+                    >
+                      <template #prepend>
+                        <div class="member-avatar mr-3">{{ getInitials(u) }}</div>
+                      </template>
+                      <v-list-item-title>{{ u.firstName }} {{ u.lastName }}</v-list-item-title>
+                      <v-list-item-subtitle>{{ u.email }}</v-list-item-subtitle>
+                    </v-list-item>
+                  </v-list>
+                </v-card>
+              </v-col>
+            </v-row>
           </v-card-text>
 
           <v-card-actions class="px-4 pb-4 justify-end">
             <v-btn variant="text" @click="editDialog = false">Cancel</v-btn>
             <v-btn
-              style="background-color: #9b7d8c"
+              color="primary"
               variant="flat"
               class="text-white rounded-lg px-6"
               @click="saveChanges()"
