@@ -12,8 +12,6 @@
     },
   });
 
-  const emit = defineEmits(["refresh"]);
-
   // Dropdown options
   const roles = ref(["admin", "lead", "member"]);
 
