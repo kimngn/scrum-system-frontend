@@ -392,7 +392,7 @@ import {
 import StoryboardServices from "../services/StoryboardServices.js";
 import StoryAssigneeServices from "../services/StoryAssigneeServices.js";
 import ProjectServices from "../services/ProjectServices.js";
-// import ProjectMembershipService from "../services/ProjectMembershipService.js";
+import ProjectMembershipServices from "../services/ProjectMembershipServices.js";
 
 /*
  * Replace this with the exact user-loading code from StoryBoard.vue
@@ -572,7 +572,7 @@ async function retrieveProjectMembers() {
     loadingMembers.value = true;
 
     const response =
-      await ProjectMembershipService
+      await ProjectMembershipServices
         .getMembershipsByProjectId(projectId.value);
 
     const memberships = Array.isArray(response.data)
