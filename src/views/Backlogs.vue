@@ -211,7 +211,7 @@
             <v-text-field
               v-model="newStory.title"
               label="Title"
-              placeholder="As a user, I want to..."
+              placeholder="title"
               variant="outlined"
               density="comfortable"
               :rules="titleRules"
@@ -615,42 +615,6 @@ async function retrieveProjectMembers() {
   }
 }
 
-/*
- * Gets the columns for the selected project and finds
- * the column named Backlog.
- */
-async function retrieveBacklogColumn() {
-  if (!projectId.value) {
-    return;
-  }
-
-  try {
-    const response =
-      await StoryboardServices.getColumnsForProject(
-        projectId.value,
-      );
-
-    const columns =
-      Array.isArray(response.data)
-        ? response.data
-        : [];
-
-    const backlogColumn = columns.find(
-      (column) =>
-        column.title
-          ?.trim()
-          .toLowerCase() === "backlog",
-    );
-
-    backlogColumnId.value =
-      backlogColumn?.id ?? null;
-  } catch (error) {
-    console.error(
-      "Failed to retrieve project columns:",
-      error,
-    );
-  }
-}
 
 async function openCreateStoryDialog() {
   if (!projectId.value) {
@@ -703,12 +667,6 @@ async function createStory() {
     return;
   }
 
-  // if (!backlogColumnId.value) {
-  //   createStoryError.value =
-  //     "The Backlog column could not be found.";
-
-  //   return;
-  // }
 
   try {
     creatingStory.value = true;
@@ -841,7 +799,7 @@ onMounted(async () => {
     await Promise.all([
       retrieveStories(),
       retrieveProjectMembers(),
-      retrieveBacklogColumn(),
+    
     ]);
   } catch (error) {
     console.error(
