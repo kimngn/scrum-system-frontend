@@ -65,8 +65,12 @@
       >
         Backlogs
       </v-btn>
-      <v-btn v-if="user !== null && (user.role === 'admin' || user.role === 'lead') && $route.name !== 'admin'" class="mx-2" :to="{ name: 'admin' }">
-        Admin
+      <v-btn
+        v-if="user !== null && user.role === 'member'"
+        class="mx-2"
+        :to="{ name: 'issues' }"
+      >
+        Issues
       </v-btn>
       <v-menu v-if="user !== null" min-width="200px" rounded>
         <template v-slot:activator="{ props }">
