@@ -9,6 +9,7 @@
   import Repo from "../components/Repo.vue";
 
   const router = useRouter();
+  const today = new Date().toISOString().split("T")[0];
   const projects = ref([]);
   const user = ref(null);
   const snackbar = ref({ value: false, color: "", text: "" });
@@ -210,6 +211,10 @@
   });
 
   async function saveChanges() {
+    if (editingProject.value.startDate && editingProject.value.endDate && editingProject.value.endDate <= editingProject.value.startDate) {
+      showSnackbar("error", "End date must be after start date.");
+      return;
+    }
     // call updateRepo, addRepo, and updateProject all at once when Save Changes button is clicked
     console.log("Editing project:" + editingProject.value.id);
     let hasError = false; // false by default, if errors are found along the way, toggled to true
@@ -281,7 +286,11 @@
   }
 
   async function getProjects() {
-    await ProjectServices.getProjects()
+    const call =
+      user.value?.role === "member"
+        ? ProjectServices.getProjectsByUserId(user.value.id)
+        : ProjectServices.getProjects();
+    await call
       .then((response) => {
         projects.value = response.data;
       })
@@ -326,6 +335,14 @@
   }
 
   async function createProject() {
+    if (project.value.startDate && project.value.startDate < today) {
+      showSnackbar("error", "Start date cannot be in the past.");
+      return;
+    }
+    if (project.value.startDate && project.value.endDate && project.value.endDate <= project.value.startDate) {
+      showSnackbar("error", "End date must be after start date.");
+      return;
+    }
     try {
       // create project and get projectId from response
       const response = await ProjectServices.addProject({
@@ -592,7 +609,7 @@
                   Delete
                 </button>
               </v-col>
-              <v-col cols="auto">
+              <v-col v-if="user && user.role !== 'member'" cols="auto">
                 <v-btn
                   color="primary"
                   @click.stop="
@@ -680,6 +697,7 @@
                 <v-text-field
                   v-model="project.startDate"
                   type="date"
+                  :min="today"
                   variant="outlined"
                   density="comfortable"
                   rounded="lg"
@@ -692,6 +710,7 @@
                 <v-text-field
                   v-model="project.endDate"
                   type="date"
+                  :min="project.startDate || undefined"
                   variant="outlined"
                   density="comfortable"
                   rounded="lg"
@@ -880,6 +899,7 @@
                 <v-text-field
                   v-model="editingProject.endDate"
                   type="date"
+                  :min="editingProject.startDate || undefined"
                   variant="outlined"
                   density="comfortable"
                   rounded="lg"

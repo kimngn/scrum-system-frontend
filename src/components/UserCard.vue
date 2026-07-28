@@ -12,6 +12,8 @@
     },
   });
 
+  const emit = defineEmits(["refresh"]);
+
   // Dropdown options
   const roles = ref(["admin", "lead", "member"]);
 
@@ -61,6 +63,7 @@
         snackbar.value.value = true;
         snackbar.value.color = "green";
         snackbar.value.text = `${newUser.value.firstName} ${newUser.value.lastName}  updated successfully!`;
+        emit("refresh");
       })
       .catch((error) => {
         console.log(error);
@@ -76,6 +79,7 @@
         snackbar.value.value = true;
         snackbar.value.color = "green";
         snackbar.value.text = `${user.value.firstName} deleted successfully!`;
+        emit("refresh");
       })
       .catch((error) => {
         console.log(error);
