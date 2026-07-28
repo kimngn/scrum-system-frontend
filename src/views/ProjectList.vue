@@ -286,15 +286,12 @@
 
       try {
         await RepoServices.addRepo(newRepo.value);
-<<<<<<< HEAD
         newAction.value.action = "create";
         newAction.value.userId = user.value.id;
         newAction.value.entityName = newRepo.value.name;
         newAction.value.entityId = editingProject.id;
         newAction.value.entityType = "repo";
         recordAction();
-=======
->>>>>>> 47a3671 (Merge pull request #30 from kimngn/ashley-UI-fixes)
         // editingProject.repos.push(newRepo.value);
 
         console.log("PROJCET REPOS: " + project.value[0]?.repos);
@@ -447,14 +444,9 @@
     await getProjects();
   }
 
-<<<<<<< HEAD
   async function deleteRepo(repo, projectId) {
     newAction.value.entityId = projectId; // grab this before project gets deleted
     await RepoServices.deleteRepo(repo.id)
-=======
-  async function deleteRepo(repoId, projectId) {
-    await RepoServices.deleteRepo(repoId)
->>>>>>> 47a3671 (Merge pull request #30 from kimngn/ashley-UI-fixes)
       .then(() => {
         showSnackbar("green", "Repo deleted successfully!");
 
@@ -922,11 +914,7 @@
                       bg-color="grey-lighten-4"
                       hide-details
                       append-icon="mdi-trash-can"
-<<<<<<< HEAD
                       @click:append="deleteRepo(repo, editingProject.id)"
-=======
-                      @click:append="deleteRepo(repo.id, editingProject.id)"
->>>>>>> 47a3671 (Merge pull request #30 from kimngn/ashley-UI-fixes)
                     ></v-text-field>
                   </div>
 
