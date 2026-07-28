@@ -4,12 +4,23 @@
   import RepoServices from "../services/RepoServices";
 
   const props = defineProps({
-    repos: {
+    projectId: {
       required: true,
     },
   });
+  const repos = ref([]);
+  const projectId = props.projectId;
 
-  onMounted(async () => {});
+  onMounted(async () => {
+    await getRepos(projectId);
+  });
+
+  async function getRepos(projectId) {
+    console.log("ProjectID:" + projectId);
+    await RepoServices.getReposByProjectId(projectId).then((response) => {
+      repos.value = response.data;
+    });
+  }
 </script>
 
 <template>
@@ -17,7 +28,7 @@
     <div class="d-flex gap-2">
       <a
         class="hover-link"
-        v-for="repo in props.repos"
+        v-for="repo in repos"
         :key="repo.name"
         :href="repo.repoUrl"
         target="_blank"

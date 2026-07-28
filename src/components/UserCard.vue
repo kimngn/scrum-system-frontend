@@ -15,9 +15,6 @@
   // Dropdown options
   const roles = ref(["admin", "lead", "member"]);
 
-  // Call back to parent
-  const emit = defineEmits(["refresh"]);
-
   // Variables
   const router = useRouter();
   const loggedInUser = ref(null); // logged in user
@@ -64,7 +61,6 @@
         snackbar.value.value = true;
         snackbar.value.color = "green";
         snackbar.value.text = `${newUser.value.firstName} ${newUser.value.lastName}  updated successfully!`;
-        isEdit.value = false;
       })
       .catch((error) => {
         console.log(error);
@@ -72,9 +68,6 @@
         snackbar.value.color = "error";
         snackbar.value.text = error.response.data.message;
       });
-
-    await getUser(user.value.id);
-    emit("refresh");
   }
 
   async function deleteUser() {
@@ -90,22 +83,8 @@
         snackbar.value.color = "error";
         snackbar.value.text = error.response.data.message;
       });
-
-    emit("refresh");
   }
 
-  async function getUser() {
-    await UserServices.getUser(user.value.id)
-      .then((response) => {
-        user.value = response.data;
-      })
-      .catch((error) => {
-        console.log(error);
-        snackbar.value.value = true;
-        snackbar.value.color = "error";
-        snackbar.value.text = error.response.data.message;
-      });
-  }
   async function getProjectsByUserId() {
     await ProjectServices.getProjectsByUserId(user.value.id)
       .then((response) => {
@@ -145,7 +124,7 @@
     <v-card-title class="headline">
       <v-row align="center">
         <v-col cols="10">
-          {{ user.id }} {{ user.firstName }} {{ user.lastName }}
+          ID {{ user.id }}: {{ user.firstName }} {{ user.lastName }}
           <v-chip class="ma-2" color="blue" label>
             <v-icon start icon="mdi-account-circle"></v-icon>
             {{ user.role }}
@@ -192,7 +171,7 @@
         <v-row class="mb-2" align="center">
           <!-- each column takes up the whole row -->
           <v-col class="pl-6" cols="12">
-            <v-row class="mt-3 mb-3 subheader">PROJECTS</v-row>
+            <v-row class="mt-3 subheader">PROJECTS</v-row>
 
             <v-col class="mt-4" cols="12">
               <div class="d-flex flex-wrap ga-2">
@@ -205,14 +184,14 @@
         </v-row>
 
         <!-- ROW 4 -->
-
-        <v-row class="mb-2" justify="space-between" align="center">
-          <v-col cols="auto" class="d-flex ga-2">
-            <button @click.stop="openEdit()" class="editButtonStyle">
-              Edit
-            </button>
-            <button @click.stop="deleteUser()" class="deleteButtonStyle">
-              Delete
+        <v-row class="mb-2">
+          <!-- each column takes up the whole row -->
+          <v-col cols="1">
+            <button class="editButtonStyle" @click="openEdit()">Edit</button>
+          </v-col>
+          <v-col cols="1">
+            <button @click="deleteUser()" class="deleteButtonStyle">
+              Suspend
             </button>
           </v-col>
         </v-row>
@@ -308,7 +287,7 @@
 
   /* try not to affect all v-chips */
   .vchipStyle.v-chip {
-    background-color: transparent;
+    background-color: rgb(229, 228, 228);
     color: black;
   }
 </style>
