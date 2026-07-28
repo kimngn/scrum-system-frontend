@@ -645,13 +645,13 @@
               <v-col class="pl-6" cols="6">
                 <v-row class="mt-3 subheader">START DATE</v-row>
                 <v-row>{{
-                  p.startDate ? new Date(p.startDate).toLocaleDateString() : "—"
+                  p.startDate ? new Date(p.startDate).toLocaleDateString(undefined, { timeZone: "UTC" }) : "—"
                 }}</v-row>
               </v-col>
               <v-col class="pl-6" cols="6">
                 <v-row class="subheader">END DATE</v-row>
                 <v-row>{{
-                  p.endDate ? new Date(p.endDate).toLocaleDateString() : "—"
+                  p.endDate ? new Date(p.endDate).toLocaleDateString(undefined, { timeZone: "UTC" }) : "—"
                 }}</v-row>
               </v-col>
             </v-row>

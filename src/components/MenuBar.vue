@@ -52,7 +52,7 @@
       >
         Projects
       </v-btn>
-      <v-btn v-if="user === null" class="mx-2" :to="{ name: 'login' }">
+      <v-btn v-if="user === null && $route.name !== 'login'" class="mx-2" :to="{ name: 'login' }">
         Login
       </v-btn>
       <v-btn
@@ -68,6 +68,13 @@
         :to="{ name: 'backlogs' }"
       >
         Backlogs
+      </v-btn>
+      <v-btn
+        v-if="user !== null && user.role === 'member'"
+        class="mx-2"
+        :to="{ name: 'issues' }"
+      >
+        Issues
       </v-btn>
       <v-menu v-if="user !== null" min-width="200px" rounded>
         <template v-slot:activator="{ props }">
