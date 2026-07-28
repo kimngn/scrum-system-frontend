@@ -239,6 +239,8 @@
       const response = await RepoServices.getReposByProjectId(projectId); // refresh repos
       projectRepos.value = response.data;
     }
+
+    await getProjects();
   }
 
   async function getProjects() {
@@ -284,6 +286,12 @@
 
       try {
         await RepoServices.addRepo(newRepo.value);
+        newAction.value.action = "create";
+        newAction.value.userId = user.value.id;
+        newAction.value.entityName = newRepo.value.name;
+        newAction.value.entityId = editingProject.id;
+        newAction.value.entityType = "repo";
+        recordAction();
         // editingProject.repos.push(newRepo.value);
 
         console.log("PROJCET REPOS: " + project.value[0]?.repos);
@@ -393,6 +401,16 @@
     await RepoServices.updateRepo(editingRepo.value.id, editingRepo.value)
       .then(() => {
         console.log("Updated repository");
+
+        newAction.value.action = "edit";
+        newAction.value.userId = user.value.id;
+        newAction.value.entityName = newRepo.value.name;
+        newAction.value.entityId = repo.projectId;
+        newAction.value.entityType = "repo";
+        newAction.value.oldValue = repo.repoUrl;
+        newAction.value.newValue = editingRepo.value.repoUrl;
+        newAction.value.fieldName = "URL";
+        recordAction();
       })
       .catch((error) => {
         console.log("Failed to update repo");
@@ -414,6 +432,7 @@
         newAction.value.entityType = "project";
 
         console.log("Record action!");
+
         recordAction();
       })
       .catch((error) => {
@@ -425,10 +444,17 @@
     await getProjects();
   }
 
-  async function deleteRepo(repoId, projectId) {
-    await RepoServices.deleteRepo(repoId)
+  async function deleteRepo(repo, projectId) {
+    newAction.value.entityId = projectId; // grab this before project gets deleted
+    await RepoServices.deleteRepo(repo.id)
       .then(() => {
         showSnackbar("green", "Repo deleted successfully!");
+
+        newAction.value.action = "delete";
+        newAction.value.userId = user.value.id;
+        newAction.value.entityType = "repo";
+
+        recordAction();
       })
       .catch((error) => {
         showSnackbar(
@@ -888,7 +914,7 @@
                       bg-color="grey-lighten-4"
                       hide-details
                       append-icon="mdi-trash-can"
-                      @click:append="deleteRepo(repo.id, editingProject.id)"
+                      @click:append="deleteRepo(repo, editingProject.id)"
                     ></v-text-field>
                   </div>
 
