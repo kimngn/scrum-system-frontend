@@ -18,6 +18,8 @@
   const memberSearch = ref("");
   const addingRepo = ref(false); // for adding a new repo in the Editing dialog
   const newRepoInput = ref(""); // for adding a new repoUrl in the Editing dialog
+  const projectRepos = ref([]); // the list of repos being put into Repo component
+
   const project = ref({
     name: "",
     description: "",
@@ -25,6 +27,7 @@
     startDate: null,
     endDate: null,
     repoUrl: "",
+    repos: [],
   });
 
   const beforeChanges = ref({});
@@ -61,8 +64,11 @@
   });
 
   const expandedProjects = ref({});
-  function toggleProject(id) {
-    expandedProjects.value[id] = !expandedProjects.value[id];
+
+  async function toggleProject(p) {
+    expandedProjects.value[p.id] = !expandedProjects.value[p.id];
+    const response = await RepoServices.getReposByProjectId(p.id);
+    projectRepos.value = response.data;
   }
 
   const editDialog = ref(false);
@@ -94,11 +100,13 @@
       status: p.status,
       startDate: p.startDate ? p.startDate.split("T")[0] : null,
       endDate: p.endDate ? p.endDate.split("T")[0] : null,
+      repos: [], // safe copy
     };
     beforeChanges.value = JSON.parse(JSON.stringify(editingProject.value));
     RepoServices.getReposByProjectId(p.id)
       .then((response) => {
         editingRepos.value = response.data; // store existing repos for a specific project into an array ref
+        projectRepos.value = response.data;
       })
       .catch((error) => {
         console.log(error);
@@ -173,6 +181,10 @@
     const projectId = editingProject.value.id;
 
     try {
+      if (!Array.isArray(editingRepos.value)) {
+        // sometimes there are no repos, thus nothing to iterate
+        editingRepos.value = [];
+      }
       for (const repo of editingRepos.value) {
         // check repo URL format
         const match = repo.repoUrl.match(
@@ -191,7 +203,7 @@
       }
       // addRepo if updating repo is successful
       try {
-        await addRepo(projectId);
+        await addRepo(editingProject.value);
       } catch (error) {
         console.log(error);
         snackbar.value.value = true;
@@ -207,7 +219,7 @@
       console.log(error);
       snackbar.value.value = true;
       snackbar.value.color = "error";
-      snackbar.value.text = error.response.data.message;
+      snackbar.value.text = error?.response?.data.message;
       hasError = true;
     }
     // no errors = no need to keep the dialog open
@@ -222,6 +234,10 @@
       snackbar.value.color = "green";
       snackbar.value.text =
         "Project and associated repo(s) have been modified.";
+
+      console.log("Project Repos!:" + projectRepos.value[0]);
+      const response = await RepoServices.getReposByProjectId(projectId); // refresh repos
+      projectRepos.value = response.data;
     }
 
     await getProjects();
@@ -229,8 +245,14 @@
 
   async function getProjects() {
     await ProjectServices.getProjects()
-      .then((response) => {
+      .then(async (response) => {
         projects.value = response.data;
+
+        // fetch repos for each project by projectId
+        for (const p of projects.value) {
+          const repos = await RepoServices.getReposByProjectId(p.id);
+          projectRepos.value = repos.data;
+        }
       })
       .catch((error) => {
         showSnackbar(
@@ -240,7 +262,7 @@
       });
   }
 
-  async function addRepo(projectId) {
+  async function addRepo(editingProject) {
     if (newRepoInput.value) {
       // extract repoName from the URL
       const urlParts = newRepoInput.value.split("/");
@@ -250,9 +272,9 @@
       // fill in newRepo
       newRepo.value.name = repoName;
       newRepo.value.repoUrl = newRepoInput.value;
-      newRepo.value.projectId = projectId;
+      newRepo.value.projectId = editingProject.id;
 
-      console.log("FLAG: NEW REPO VALUE REPOURL: " + newRepoInput.value);
+      console.log("FLAG new Repo PROJECT ID:" + editingProject.id);
       // check for correct URL format
       const match = newRepo.value.repoUrl.match(
         /^https:\/\/github\.com\/([^\/]+)\/([^\/]+)$/,
@@ -264,12 +286,15 @@
 
       try {
         await RepoServices.addRepo(newRepo.value);
+<<<<<<< HEAD
         newAction.value.action = "create";
         newAction.value.userId = user.value.id;
         newAction.value.entityName = newRepo.value.name;
         newAction.value.entityId = editingProject.id;
         newAction.value.entityType = "repo";
         recordAction();
+=======
+>>>>>>> 47a3671 (Merge pull request #30 from kimngn/ashley-UI-fixes)
         // editingProject.repos.push(newRepo.value);
 
         console.log("PROJCET REPOS: " + project.value[0]?.repos);
@@ -422,9 +447,14 @@
     await getProjects();
   }
 
+<<<<<<< HEAD
   async function deleteRepo(repo, projectId) {
     newAction.value.entityId = projectId; // grab this before project gets deleted
     await RepoServices.deleteRepo(repo.id)
+=======
+  async function deleteRepo(repoId, projectId) {
+    await RepoServices.deleteRepo(repoId)
+>>>>>>> 47a3671 (Merge pull request #30 from kimngn/ashley-UI-fixes)
       .then(() => {
         showSnackbar("green", "Repo deleted successfully!");
 
@@ -440,6 +470,15 @@
           error.response?.data?.message || "Failed to delete repo",
         );
       });
+
+    // fixes the bug where ALL repos get deleted (visually, not actually)
+    const response = await RepoServices.getReposByProjectId(projectId);
+    editingRepos.value = response.data;
+  }
+
+  async function selectProject(p) {
+    const response = await RepoServices.getReposByProjectId(p.id);
+    projectRepos.value = response.data;
   }
 
   function resetProject() {
@@ -500,7 +539,7 @@
         v-for="p in projects"
         :key="p.id"
         class="rounded-lg elevation-5 mb-4"
-        @click="toggleProject(p.id)"
+        @click="toggleProject(p)"
       >
         <v-card-title class="headline">
           <v-row align="center">
@@ -545,7 +584,8 @@
               <v-col class="pl-6" cols="6">
                 <v-row class="mt-3 subheader">REPOS</v-row>
                 <v-row>
-                  <Repo :projectId="p.id" />
+                  <!-- todo: put repositories component here -->
+                  <Repo :repos="projectRepos" />
                 </v-row>
               </v-col>
             </v-row>
@@ -882,7 +922,11 @@
                       bg-color="grey-lighten-4"
                       hide-details
                       append-icon="mdi-trash-can"
+<<<<<<< HEAD
                       @click:append="deleteRepo(repo, editingProject.id)"
+=======
+                      @click:append="deleteRepo(repo.id, editingProject.id)"
+>>>>>>> 47a3671 (Merge pull request #30 from kimngn/ashley-UI-fixes)
                     ></v-text-field>
                   </div>
 

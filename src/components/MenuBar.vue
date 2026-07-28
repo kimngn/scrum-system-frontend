@@ -45,7 +45,11 @@
         {{ title }}
       </v-toolbar-title>
       <v-spacer></v-spacer>
-      <v-btn v-if="user !== null" class="mx-2" :to="{ name: 'projects' }">
+      <v-btn
+        v-if="user !== null && user.role === 'member'"
+        class="mx-2"
+        :to="{ name: 'projects' }"
+      >
         Projects
       </v-btn>
       <v-btn v-if="user === null" class="mx-2" :to="{ name: 'login' }">
@@ -65,9 +69,7 @@
       >
         Backlogs
       </v-btn>
-      <v-btn v-if="user !== null && (user.role === 'admin' || user.role === 'lead')" class="mx-2" :to="{ name: 'admin' }">
-        Admin
-      </v-btn>
+
       <v-menu v-if="user !== null" min-width="200px" rounded>
         <template v-slot:activator="{ props }">
           <v-btn icon v-bind="props">
