@@ -46,7 +46,7 @@
       </v-toolbar-title>
       <v-spacer></v-spacer>
       <v-btn
-        v-if="user !== null && user.role === 'member'"
+        v-if="user !== null && user.role !== 'admin'"
         class="mx-2"
         :to="{ name: 'projects' }"
       >
@@ -69,7 +69,6 @@
       >
         Backlogs
       </v-btn>
-
       <v-menu v-if="user !== null" min-width="200px" rounded>
         <template v-slot:activator="{ props }">
           <v-btn icon v-bind="props">
