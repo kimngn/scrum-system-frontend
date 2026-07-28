@@ -194,7 +194,9 @@ function getInitials(u) {
 }
 
 function formatDate(date) {
-  return date ? new Date(date).toLocaleDateString() : "—";
+  return date
+    ? new Date(date).toLocaleDateString(undefined, { timeZone: "UTC" })
+    : "—";
 }
 
 async function openEdit() {
@@ -318,7 +320,7 @@ async function loadProject() {
   const res = await ProjectServices.getProject(projectId);
   const data = Array.isArray(res.data) ? res.data[0] : res.data;
 
-  const todayStr = new Date().toLocaleDateString("en-CA");
+  const todayStr = new Date().toISOString().split("T")[0];
   if (
     data &&
     data.endDate &&
@@ -349,7 +351,7 @@ async function loadSprints() {
   const res = await SprintServices.getSprintsByProjectId(projectId);
   const data = Array.isArray(res.data) ? res.data : [];
 
-  const todayStr = new Date().toLocaleDateString("en-CA");
+  const todayStr = new Date().toISOString().split("T")[0];
   const expired = [];
   for (const s of data) {
     const endDate = s.endDate ? s.endDate.split("T")[0] : "";
@@ -512,7 +514,7 @@ onMounted(async () => {
           <div class="mt-2 text-body-2 text-grey-darken-1">
             <span class="subheader">START</span>
             {{ formatDate(project.startDate) }}
-            &​nbsp;|&​nbsp;
+            &nbsp;|&nbsp;
             <span class="subheader">END</span>
             {{ formatDate(project.endDate) }}
           </div>
