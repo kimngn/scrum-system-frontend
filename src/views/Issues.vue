@@ -201,6 +201,15 @@
             </span>
           </div>
 
+          <!-- Edit -->
+          <v-btn
+            icon="mdi-pencil-outline"
+            variant="text"
+            size="small"
+            color="grey"
+            @click="openEditDialog(issue)"
+          />
+
           <!-- Delete -->
           <v-btn
             icon="mdi-delete-outline"
@@ -225,7 +234,7 @@
         >
           <div>
             <div class="text-h6 font-weight-bold">
-              Create Issue
+              {{ isEditing ? "Edit Issue" : "Create Issue" }}
             </div>
 
             <div class="text-caption text-grey">
@@ -237,7 +246,7 @@
             icon="mdi-close"
             variant="text"
             size="small"
-            :disabled="creatingIssue"
+            :disabled="savingIssue"
             @click="closeCreateDialog"
           />
         </v-card-title>
@@ -247,7 +256,7 @@
         <v-card-text class="px-6 pt-5">
           <v-form
             ref="issueFormRef"
-            @submit.prevent="createIssue"
+            @submit.prevent="saveIssue"
           >
             <v-text-field
               v-model="newIssue.title"
@@ -329,7 +338,7 @@
         <v-card-actions class="justify-end px-6 py-4">
           <v-btn
             variant="outlined"
-            :disabled="creatingIssue"
+            :disabled="savingIssue"
             @click="closeCreateDialog"
           >
             Cancel
@@ -337,10 +346,10 @@
 
           <v-btn
             color="primary"
-            :loading="creatingIssue"
-            @click="createIssue"
+            :loading="savingIssue"
+            @click="saveIssue"
           >
-            Create Issue
+            {{ isEditing ? "Save Changes" : "Create Issue" }}
           </v-btn>
         </v-card-actions>
       </v-card>
@@ -421,7 +430,7 @@ const selectedType = ref("All");
 const loadingProjects = ref(false);
 const loadingIssues = ref(false);
 const loadingMembers = ref(false);
-const creatingIssue = ref(false);
+const savingIssue = ref(false);
 const deletingIssue = ref(false);
 
 // Errors
@@ -433,6 +442,12 @@ const createDialog = ref(false);
 const deleteDialog = ref(false);
 const issueFormRef = ref(null);
 const issueToDelete = ref(null);
+
+// Edit state
+const editingIssueId = ref(null);
+const editingAssigneeRecordIds = ref([]);
+
+const isEditing = computed(() => editingIssueId.value !== null);
 
 const issueTypes = [
   "Bug",
@@ -469,6 +484,7 @@ function defaultIssue() {
     priority: "Medium",
     storyPoint: 3,
     assigneeIds: [],
+    columnId: 1,
   };
 }
 
@@ -605,6 +621,9 @@ async function openCreateDialog() {
     return;
   }
 
+  editingIssueId.value = null;
+  editingAssigneeRecordIds.value = [];
+
   newIssue.value = defaultIssue();
   createError.value = "";
   createDialog.value = true;
@@ -613,59 +632,107 @@ async function openCreateDialog() {
 }
 
 function closeCreateDialog() {
-  if (creatingIssue.value) {
+  if (savingIssue.value) {
     return;
   }
 
   createDialog.value = false;
   createError.value = "";
-  newIssue.value = defaultIssue();
 
+  editingIssueId.value = null;
+  editingAssigneeRecordIds.value = [];
+
+  newIssue.value = defaultIssue();
   issueFormRef.value?.resetValidation();
 }
 
-async function createIssue() {
+async function openEditDialog(issue) {
+  if (!issue?.id) {
+    pageError.value = "The selected issue could not be opened.";
+    return;
+  }
+
   createError.value = "";
 
-  const validation =
-    await issueFormRef.value?.validate();
+  // Make sure the dropdown contains the current project's members.
+  await retrieveProjectMembers();
+
+  const assignments = Array.isArray(issue.assignee)
+    ? issue.assignee
+    : [];
+
+  editingIssueId.value = issue.id;
+
+  // These are StoryAssignee table record IDs. They are used when
+  // deleting the old assignment records before saving replacements.
+  editingAssigneeRecordIds.value = assignments
+    .map((assignment) => assignment.id)
+    .filter((id) => id !== undefined && id !== null);
+
+  // These are User IDs. They are the values selected in the dropdown.
+  const selectedUserIds = assignments
+    .map((assignment) => assignment.userId)
+    .filter((id) => id !== undefined && id !== null);
+
+  newIssue.value = {
+    title: issue.title || "",
+    description: issue.description || "",
+    type: issue.type || "Issue",
+    priority: issue.priority || "Medium",
+    storyPoint: issue.storyPoint ?? 3,
+    assigneeIds: selectedUserIds,
+
+    // Preserve the issue's current column/status while editing.
+    columnId: issue.columnId ?? 1,
+  };
+
+  createDialog.value = true;
+}
+
+async function saveIssue() {
+  createError.value = "";
+
+  const validation = await issueFormRef.value?.validate();
 
   if (validation && !validation.valid) {
     return;
   }
 
   if (!projectId.value) {
-    createError.value =
-      "A project must be selected.";
-
+    createError.value = "A project must be selected.";
     return;
   }
 
   try {
-    creatingIssue.value = true;
+    savingIssue.value = true;
 
-    const issue = {
+    const issueData = {
       title: newIssue.value.title.trim(),
-      description:
-        newIssue.value.description?.trim() || "",
+      description: newIssue.value.description?.trim() || "",
       type: newIssue.value.type,
       priority: newIssue.value.priority,
-      storyPoint:
-        Number(newIssue.value.storyPoint),
+      storyPoint: Number(newIssue.value.storyPoint),
       projectId: projectId.value,
-
-      /*
-       * This places new issues in Backlog.
-       * Change this if Backlog has a different ID.
-       */
-      columnId: 1,
+      columnId: newIssue.value.columnId ?? 1,
     };
 
-    const response =
-      await StoryboardServices.createStory(issue);
+    let issueId = editingIssueId.value;
 
-    const issueId = response.data.id;
+    if (isEditing.value) {
+      // Update the existing UserStory record.
+      await StoryboardServices.updateStory(issueId, issueData);
 
+      // Remove all previous StoryAssignee records.
+      for (const assignmentId of editingAssigneeRecordIds.value) {
+        await StoryAssigneeServices.deleteAssignee(assignmentId);
+      }
+    } else {
+      // Create a new UserStory record.
+      const response = await StoryboardServices.createStory(issueData);
+      issueId = response.data.id;
+    }
+
+    // Re-create the selected StoryAssignee records.
     for (const userId of newIssue.value.assigneeIds) {
       await StoryAssigneeServices.addAssignee({
         userStoryId: issueId,
@@ -673,18 +740,27 @@ async function createIssue() {
       });
     }
 
-    creatingIssue.value = false;
+    // Turn loading off before calling closeCreateDialog because
+    // closeCreateDialog intentionally refuses to close while saving.
+    savingIssue.value = false;
     closeCreateDialog();
 
     await retrieveIssues();
   } catch (error) {
-    console.error("Failed to create issue:", error);
+    console.error(
+      isEditing.value
+        ? "Failed to update issue:"
+        : "Failed to create issue:",
+      error,
+    );
 
     createError.value =
       error.response?.data?.message ||
-      "The issue could not be created.";
+      (isEditing.value
+        ? "The issue could not be updated."
+        : "The issue could not be created.");
   } finally {
-    creatingIssue.value = false;
+    savingIssue.value = false;
   }
 }
 
