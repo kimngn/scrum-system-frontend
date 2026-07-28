@@ -15,11 +15,13 @@ const members = ref([]);
 const repos = ref([]);
 const sprints = ref([]);
 const sprintDialog = ref(false);
+const sprintFormError = ref("");
 const sprintForm = ref({
   id: null,
   name: "",
   startDate: null,
   endDate: null,
+  status: "planned",
 });
 const today = new Date().toISOString().split("T")[0];
 const tab = ref("Summary");
@@ -143,7 +145,20 @@ async function updateRepo(repo) {
 async function loadProject() {
   const res = await ProjectServices.getProject(projectId);
   const data = Array.isArray(res.data) ? res.data[0] : res.data;
-  project.value = data;
+
+  const todayStr = new Date().toLocaleDateString("en-CA");
+  if (
+    data &&
+    data.endDate &&
+    data.status !== "completed" &&
+    data.endDate.split("T")[0] < todayStr
+  ) {
+    await ProjectServices.updateProject(data.id, { status: "completed" });
+    const res2 = await ProjectServices.getProject(projectId);
+    project.value = Array.isArray(res2.data) ? res2.data[0] : res2.data;
+  } else {
+    project.value = data;
+  }
 }
 
 async function loadMembers() {
@@ -160,24 +175,42 @@ async function loadRepos() {
 
 async function loadSprints() {
   const res = await SprintServices.getSprintsByProjectId(projectId);
-  sprints.value = Array.isArray(res.data) ? res.data : [];
+  const data = Array.isArray(res.data) ? res.data : [];
+
+  const todayStr = new Date().toLocaleDateString("en-CA");
+  const expired = [];
+  for (const s of data) {
+    const endDate = s.endDate ? s.endDate.split("T")[0] : "";
+    if (s.status !== "completed" && endDate < todayStr) {
+      expired.push(s);
+    }
+  }
+
+  for (const s of expired) {
+    await SprintServices.updateSprint(s.id, { status: "completed" });
+  }
+
+  if (expired.length > 0) {
+    const res2 = await SprintServices.getSprintsByProjectId(projectId);
+    sprints.value = Array.isArray(res2.data) ? res2.data : [];
+  } else {
+    sprints.value = data;
+  }
 }
 
-function sprintStatus(s) {
-  const now = new Date();
-  const start = new Date(s.startDate);
-  const end = new Date(s.endDate);
-  if (now < start) return "Planned";
-  if (now > end) return "Completed";
-  return "Active";
-}
-
-function sprintStatusColor(s) {
-  const status = sprintStatus(s);
-  if (status === "Active") return "success";
-  if (status === "Completed") return "grey";
+function sprintStatusColor(status) {
+  if (status === "active") return "success";
+  if (status === "completed") return "grey";
   return "warning";
 }
+
+function sprintStatusLabel(status) {
+  if (status === "active") return "Active";
+  if (status === "completed") return "Completed";
+  return "Planned";
+}
+
+const sprintStatusError = ref("");
 
 function openSprintDialog(sprint) {
   if (sprint) {
@@ -186,6 +219,7 @@ function openSprintDialog(sprint) {
       name: sprint.name,
       startDate: sprint.startDate ? sprint.startDate.split("T")[0] : null,
       endDate: sprint.endDate ? sprint.endDate.split("T")[0] : null,
+      status: sprint.status || "planned",
     };
   } else {
     sprintForm.value = {
@@ -193,14 +227,22 @@ function openSprintDialog(sprint) {
       name: "",
       startDate: null,
       endDate: null,
+      status: "planned",
     };
   }
+  sprintFormError.value = "";
   sprintDialog.value = true;
 }
 
 async function saveSprint() {
   const start = sprintForm.value.startDate;
   const end = sprintForm.value.endDate;
+  const name = sprintForm.value.name || "";
+
+  if (name.trim() === "") {
+    sprintFormError.value = "Sprint name cannot be empty.";
+    return;
+  }
 
   if (end < start) {
     window.alert("End date must be on or after the start date.");
@@ -216,8 +258,14 @@ async function saveSprint() {
     name: sprintForm.value.name,
     startDate: sprintForm.value.startDate,
     endDate: sprintForm.value.endDate,
-    projectId,
+    projectId: projectId,
   };
+
+  if (sprintForm.value.id) {
+    payload.status = sprintForm.value.status;
+  }
+
+  sprintFormError.value = "";
   try {
     if (sprintForm.value.id) {
       await SprintServices.updateSprint(sprintForm.value.id, payload);
@@ -227,7 +275,11 @@ async function saveSprint() {
     sprintDialog.value = false;
     await loadSprints();
   } catch (error) {
-    console.error(error);
+    if (error.response && error.response.data && error.response.data.message) {
+      sprintFormError.value = error.response.data.message;
+    } else {
+      sprintFormError.value = "Failed to save sprint.";
+    }
   }
 }
 
@@ -237,7 +289,11 @@ async function deleteSprint(id) {
     await SprintServices.deleteSprint(id);
     await loadSprints();
   } catch (error) {
-    console.error(error);
+    if (error.response && error.response.data && error.response.data.message) {
+      sprintStatusError.value = error.response.data.message;
+    } else {
+      sprintStatusError.value = "Failed to delete sprint.";
+    }
   }
 }
 
@@ -371,10 +427,7 @@ onMounted(async () => {
       </v-window-item>
 
       <v-window-item value="Sprints">
-        <div class="d-flex justify-space-between align-center mb-4">
-          <div class="text-body-1">
-            {{ sprints.length }} sprint{{ sprints.length === 1 ? "" : "s" }} in this project
-          </div>
+        <div class="d-flex justify-end mb-4">
           <v-btn
             color="primary"
             prepend-icon="mdi-plus"
@@ -394,10 +447,10 @@ onMounted(async () => {
                   </div>
                   <v-chip
                     size="small"
-                    :color="sprintStatusColor(s)"
+                    :color="sprintStatusColor(s.status)"
                     class="mt-2 mb-2"
                   >
-                    {{ sprintStatus(s) }}
+                    {{ sprintStatusLabel(s.status) }}
                   </v-chip>
                   <div class="text-body-2 text-grey-darken-1">
                     {{ formatDate(s.startDate) }} – {{ formatDate(s.endDate) }}
@@ -416,7 +469,10 @@ onMounted(async () => {
                     <v-list-item @click="openSprintDialog(s)">
                       <v-list-item-title>Edit</v-list-item-title>
                     </v-list-item>
-                    <v-list-item @click="deleteSprint(s.id)">
+                    <v-list-item
+                      v-if="s.status !== 'active'"
+                      @click="deleteSprint(s.id)"
+                    >
                       <v-list-item-title class="text-error">
                         Delete
                       </v-list-item-title>
@@ -427,6 +483,17 @@ onMounted(async () => {
             </v-card>
           </v-col>
         </v-row>
+
+        <v-alert
+          v-if="sprintStatusError"
+          type="error"
+          variant="tonal"
+          class="mt-4"
+          closable
+          @click:close="sprintStatusError = ''"
+        >
+          {{ sprintStatusError }}
+        </v-alert>
 
         <v-alert
           v-if="sprints.length === 0"
@@ -636,6 +703,18 @@ onMounted(async () => {
       </v-card-title>
 
       <v-card-text class="px-4">
+        <v-alert
+          v-if="sprintFormError"
+          type="error"
+          variant="tonal"
+          density="compact"
+          class="mb-3"
+          closable
+          @click:close="sprintFormError = ''"
+        >
+          {{ sprintFormError }}
+        </v-alert>
+
         <div class="subheader mb-1">SPRINT NAME</div>
         <v-text-field
           v-model="sprintForm.name"
@@ -644,6 +723,7 @@ onMounted(async () => {
           rounded="lg"
           bg-color="grey-lighten-4"
           class="mb-1"
+          :error="sprintFormError !== '' && sprintForm.name.trim() === ''"
           hide-details
         ></v-text-field>
 
@@ -675,6 +755,25 @@ onMounted(async () => {
             ></v-text-field>
           </v-col>
         </v-row>
+
+        <template v-if="sprintForm.id">
+          <div class="subheader mt-3 mb-1">STATUS</div>
+          <v-select
+            v-model="sprintForm.status"
+            :items="[
+              { title: 'Planned', value: 'planned' },
+              { title: 'Active', value: 'active' },
+              { title: 'Completed', value: 'completed' },
+            ]"
+            item-title="title"
+            item-value="value"
+            variant="outlined"
+            density="comfortable"
+            rounded="lg"
+            bg-color="grey-lighten-4"
+            hide-details
+          ></v-select>
+        </template>
       </v-card-text>
 
       <v-card-actions class="px-4 pb-4 justify-end">
