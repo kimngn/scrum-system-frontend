@@ -18,8 +18,6 @@
   const memberSearch = ref("");
   const addingRepo = ref(false); // for adding a new repo in the Editing dialog
   const newRepoInput = ref(""); // for adding a new repoUrl in the Editing dialog
-  const projectRepos = ref([]); // the list of repos being put into Repo component
-
   const project = ref({
     name: "",
     description: "",
@@ -27,7 +25,6 @@
     startDate: null,
     endDate: null,
     repoUrl: "",
-    repos: [],
   });
 
   const beforeChanges = ref({});
@@ -64,11 +61,8 @@
   });
 
   const expandedProjects = ref({});
-
-  async function toggleProject(p) {
-    expandedProjects.value[p.id] = !expandedProjects.value[p.id];
-    const response = await RepoServices.getReposByProjectId(p.id);
-    projectRepos.value = response.data;
+  function toggleProject(id) {
+    expandedProjects.value[id] = !expandedProjects.value[id];
   }
 
   const editDialog = ref(false);
@@ -100,13 +94,11 @@
       status: p.status,
       startDate: p.startDate ? p.startDate.split("T")[0] : null,
       endDate: p.endDate ? p.endDate.split("T")[0] : null,
-      repos: [], // safe copy
     };
     beforeChanges.value = JSON.parse(JSON.stringify(editingProject.value));
     RepoServices.getReposByProjectId(p.id)
       .then((response) => {
         editingRepos.value = response.data; // store existing repos for a specific project into an array ref
-        projectRepos.value = response.data;
       })
       .catch((error) => {
         console.log(error);
@@ -181,10 +173,6 @@
     const projectId = editingProject.value.id;
 
     try {
-      if (!Array.isArray(editingRepos.value)) {
-        // sometimes there are no repos, thus nothing to iterate
-        editingRepos.value = [];
-      }
       for (const repo of editingRepos.value) {
         // check repo URL format
         const match = repo.repoUrl.match(
@@ -203,7 +191,7 @@
       }
       // addRepo if updating repo is successful
       try {
-        await addRepo(editingProject.value);
+        await addRepo(projectId);
       } catch (error) {
         console.log(error);
         snackbar.value.value = true;
@@ -219,7 +207,7 @@
       console.log(error);
       snackbar.value.value = true;
       snackbar.value.color = "error";
-      snackbar.value.text = error?.response?.data.message;
+      snackbar.value.text = error.response.data.message;
       hasError = true;
     }
     // no errors = no need to keep the dialog open
@@ -234,10 +222,6 @@
       snackbar.value.color = "green";
       snackbar.value.text =
         "Project and associated repo(s) have been modified.";
-
-      console.log("Project Repos!:" + projectRepos.value[0]);
-      const response = await RepoServices.getReposByProjectId(projectId); // refresh repos
-      projectRepos.value = response.data;
     }
 
     await getProjects();
@@ -245,14 +229,8 @@
 
   async function getProjects() {
     await ProjectServices.getProjects()
-      .then(async (response) => {
+      .then((response) => {
         projects.value = response.data;
-
-        // fetch repos for each project by projectId
-        for (const p of projects.value) {
-          const repos = await RepoServices.getReposByProjectId(p.id);
-          projectRepos.value = repos.data;
-        }
       })
       .catch((error) => {
         showSnackbar(
@@ -262,7 +240,7 @@
       });
   }
 
-  async function addRepo(editingProject) {
+  async function addRepo(projectId) {
     if (newRepoInput.value) {
       // extract repoName from the URL
       const urlParts = newRepoInput.value.split("/");
@@ -272,9 +250,9 @@
       // fill in newRepo
       newRepo.value.name = repoName;
       newRepo.value.repoUrl = newRepoInput.value;
-      newRepo.value.projectId = editingProject.id;
+      newRepo.value.projectId = projectId;
 
-      console.log("FLAG new Repo PROJECT ID:" + editingProject.id);
+      console.log("FLAG: NEW REPO VALUE REPOURL: " + newRepoInput.value);
       // check for correct URL format
       const match = newRepo.value.repoUrl.match(
         /^https:\/\/github\.com\/([^\/]+)\/([^\/]+)$/,
@@ -462,15 +440,6 @@
           error.response?.data?.message || "Failed to delete repo",
         );
       });
-
-    // fixes the bug where ALL repos get deleted (visually, not actually)
-    const response = await RepoServices.getReposByProjectId(projectId);
-    editingRepos.value = response.data;
-  }
-
-  async function selectProject(p) {
-    const response = await RepoServices.getReposByProjectId(p.id);
-    projectRepos.value = response.data;
   }
 
   function resetProject() {
@@ -531,7 +500,7 @@
         v-for="p in projects"
         :key="p.id"
         class="rounded-lg elevation-5 mb-4"
-        @click="toggleProject(p)"
+        @click="toggleProject(p.id)"
       >
         <v-card-title class="headline">
           <v-row align="center">
@@ -576,8 +545,7 @@
               <v-col class="pl-6" cols="6">
                 <v-row class="mt-3 subheader">REPOS</v-row>
                 <v-row>
-                  <!-- todo: put repositories component here -->
-                  <Repo :repos="projectRepos" />
+                  <Repo :projectId="p.id" />
                 </v-row>
               </v-col>
             </v-row>
