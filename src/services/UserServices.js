@@ -5,6 +5,9 @@ export default {
     return apiClient.get("users");
   },
 
+  getUser(userId) {
+    return apiClient.get("users/" + userId);
+  },
   addUser(user) {
     return apiClient.post("users", user);
   },
@@ -46,6 +49,3 @@ export default {
     return apiClient.put("users/" + userId, roleData);
   },
 };
-
-
-
