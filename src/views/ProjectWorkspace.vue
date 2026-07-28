@@ -3,8 +3,10 @@ import { ref, computed, onMounted } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import ProjectServices from "../services/ProjectServices.js";
 import ProjectMembershipServices from "../services/ProjectMembershipServices.js";
+import UserServices from "../services/UserServices.js";
 import RepoServices from "../services/RepoServices.js";
 import SprintServices from "../services/SprintServices.js";
+import TeamServices from "../services/TeamServices.js";
 
 const route = useRoute();
 const router = useRouter();
@@ -14,6 +16,14 @@ const project = ref(null);
 const members = ref([]);
 const repos = ref([]);
 const sprints = ref([]);
+const sprintDialog = ref(false);
+const sprintForm = ref({
+  id: null,
+  name: "",
+  startDate: null,
+  endDate: null,
+});
+const today = new Date().toISOString().split("T")[0];
 const tab = ref("Summary");
 const newRepoUrl = ref("");
 
@@ -26,6 +36,146 @@ const editingProject = ref({
   startDate: null,
   endDate: null,
 });
+const editingMembers = ref([]);
+const removedMembershipIds = ref([]);
+const editMemberSearch = ref("");
+const allUsers = ref([]);
+
+const filteredEditUsers = computed(() => {
+  if (!editMemberSearch.value) return [];
+  const q = editMemberSearch.value.toLowerCase();
+  const currentIds = editingMembers.value.map((m) => m.user.id);
+  return allUsers.value.filter(
+    (u) =>
+      u.role !== "admin" &&
+      !currentIds.includes(u.id) &&
+      (u.firstName.toLowerCase().includes(q) ||
+        u.lastName.toLowerCase().includes(q) ||
+        u.email.toLowerCase().includes(q))
+  );
+});
+
+function addEditMember(u) {
+  editingMembers.value.push({ user: u, role: "member", isNew: true });
+  editMemberSearch.value = "";
+}
+
+function removeEditMember(i) {
+  const m = editingMembers.value[i];
+  if (m.id) removedMembershipIds.value.push(m.id);
+  editingMembers.value.splice(i, 1);
+}
+
+// --- Team state ---
+const teams = ref([]);
+const expandedTeamId = ref(null);
+const teamDialog = ref(false);
+const teamDialogMode = ref("create");
+const memberSearch = ref("");
+const teamForm = ref({ id: null, name: "", description: "", members: [] });
+
+const filteredProjectMembers = computed(() => {
+  if (!memberSearch.value) return [];
+  const q = memberSearch.value.toLowerCase();
+  return members.value.filter(
+    (m) =>
+      !teamForm.value.members.includes(m.userId) &&
+      (m.user.firstName.toLowerCase().includes(q) ||
+        m.user.lastName.toLowerCase().includes(q) ||
+        m.user.email.toLowerCase().includes(q))
+  );
+});
+
+const selectedTeamMemberDetails = computed(() =>
+  teamForm.value.members
+    .map((uid) => members.value.find((m) => m.userId === uid))
+    .filter(Boolean)
+);
+
+function addTeamMember(m) {
+  teamForm.value.members.push(m.userId);
+  memberSearch.value = "";
+}
+
+function removeTeamMember(userId) {
+  const idx = teamForm.value.members.indexOf(userId);
+  if (idx !== -1) teamForm.value.members.splice(idx, 1);
+}
+
+function getInitialsFromUser(u) {
+  return (u.firstName[0] + u.lastName[0]).toUpperCase();
+}
+
+async function loadTeams() {
+  const res = await TeamServices.getTeamsByProjectId(projectId);
+  teams.value = Array.isArray(res.data) ? res.data : [];
+}
+
+function toggleExpandTeam(teamId) {
+  expandedTeamId.value = expandedTeamId.value === teamId ? null : teamId;
+}
+
+function openNewTeamDialog() {
+  teamDialogMode.value = "create";
+  teamForm.value = { id: null, name: "", description: "", members: [] };
+  memberSearch.value = "";
+  teamDialog.value = true;
+}
+
+function openEditTeamDialog(team) {
+  teamDialogMode.value = "edit";
+  teamForm.value = {
+    id: team.id,
+    name: team.name,
+    description: team.description || "",
+    members: team.member.map((m) => m.userId),
+  };
+  memberSearch.value = "";
+  teamDialog.value = true;
+}
+
+async function saveTeam() {
+  if (!teamForm.value.name) return;
+  try {
+    if (teamDialogMode.value === "create") {
+      await TeamServices.createTeam({
+        name: teamForm.value.name,
+        description: teamForm.value.description || null,
+        projectId,
+        members: teamForm.value.members,
+      });
+    } else {
+      await TeamServices.updateTeam(teamForm.value.id, {
+        name: teamForm.value.name,
+        description: teamForm.value.description || null,
+      });
+      const existing = teams.value.find((t) => t.id === teamForm.value.id);
+      const existingIds = existing?.member?.map((m) => m.userId) || [];
+      const toAdd = teamForm.value.members.filter((id) => !existingIds.includes(id));
+      const toRemove = existing?.member?.filter((m) => !teamForm.value.members.includes(m.userId)) || [];
+      await Promise.all(toAdd.map((uid) => TeamServices.addMember({ teamId: teamForm.value.id, userId: uid })));
+      await Promise.all(toRemove.map((m) => TeamServices.removeMember(m.id)));
+    }
+    teamDialog.value = false;
+    await loadTeams();
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+async function deleteTeam(teamId) {
+  if (!window.confirm("Are you sure you want to delete this team?")) return;
+  try {
+    await TeamServices.deleteTeam(teamId);
+    if (expandedTeamId.value === teamId) {
+      expandedTeamId.value = null;
+    }
+    await loadTeams();
+  } catch (err) {
+    console.error(err);
+  }
+}
+// --- End team ---
 
 const projectInitials = computed(() => {
   if (!project.value?.name) return "P";
@@ -45,7 +195,7 @@ function formatDate(date) {
   return date ? new Date(date).toLocaleDateString() : "—";
 }
 
-function openEdit() {
+async function openEdit() {
   editingProject.value = {
     id: project.value.id,
     name: project.value.name,
@@ -58,6 +208,25 @@ function openEdit() {
       ? project.value.endDate.split("T")[0]
       : null,
   };
+  try {
+    const res = await ProjectMembershipServices.getMembershipsByProjectId(project.value.id);
+    editingMembers.value = (Array.isArray(res.data) ? res.data : []).map((m) => ({
+      id: m.id,
+      user: m.user,
+      role: m.role,
+      isNew: false,
+    }));
+  } catch {
+    editingMembers.value = [];
+  }
+  if (allUsers.value.length === 0) {
+    try {
+      const res = await UserServices.getAllUsers();
+      allUsers.value = res.data;
+    } catch {}
+  }
+  removedMembershipIds.value = [];
+  editMemberSearch.value = "";
   editDialog.value = true;
 }
 
@@ -70,9 +239,20 @@ async function saveProject() {
       startDate: editingProject.value.startDate,
       endDate: editingProject.value.endDate,
     });
-
+    for (const id of removedMembershipIds.value) {
+      await ProjectMembershipServices.deleteMembership(id);
+    }
+    for (const m of editingMembers.value.filter((m) => m.isNew)) {
+      await ProjectMembershipServices.addMembership({
+        userId: m.user.id,
+        projectId: editingProject.value.id,
+        role: m.role,
+      });
+    }
     editDialog.value = false;
     await loadProject();
+    await loadMembers();
+    await loadTeams();
   } catch (error) {
     console.error(error);
   }
@@ -155,8 +335,91 @@ async function loadSprints() {
   sprints.value = Array.isArray(res.data) ? res.data : [];
 }
 
+function sprintStatus(s) {
+  const now = new Date();
+  const start = new Date(s.startDate);
+  const end = new Date(s.endDate);
+  if (now < start) return "Planned";
+  if (now > end) return "Completed";
+  return "Active";
+}
+
+function sprintStatusColor(s) {
+  const status = sprintStatus(s);
+  if (status === "Active") return "success";
+  if (status === "Completed") return "grey";
+  return "warning";
+}
+
+function openSprintDialog(sprint) {
+  if (sprint) {
+    sprintForm.value = {
+      id: sprint.id,
+      name: sprint.name,
+      startDate: sprint.startDate ? sprint.startDate.split("T")[0] : null,
+      endDate: sprint.endDate ? sprint.endDate.split("T")[0] : null,
+    };
+  } else {
+    sprintForm.value = {
+      id: null,
+      name: "",
+      startDate: null,
+      endDate: null,
+    };
+  }
+  sprintDialog.value = true;
+}
+
+async function saveSprint() {
+  const start = sprintForm.value.startDate;
+  const end = sprintForm.value.endDate;
+
+  if (end < start) {
+    window.alert("End date must be on or after the start date.");
+    return;
+  }
+
+  if (!sprintForm.value.id && (start < today || end < today)) {
+    window.alert("New sprints cannot be created with past dates.");
+    return;
+  }
+
+  const payload = {
+    name: sprintForm.value.name,
+    startDate: sprintForm.value.startDate,
+    endDate: sprintForm.value.endDate,
+    projectId,
+  };
+  try {
+    if (sprintForm.value.id) {
+      await SprintServices.updateSprint(sprintForm.value.id, payload);
+    } else {
+      await SprintServices.addSprint(payload);
+    }
+    sprintDialog.value = false;
+    await loadSprints();
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+async function deleteSprint(id) {
+  if (!window.confirm("Are you sure you want to delete this sprint?")) return;
+  try {
+    await SprintServices.deleteSprint(id);
+    await loadSprints();
+  } catch (error) {
+    console.error(error);
+  }
+}
+
 onMounted(async () => {
-  await Promise.all([loadProject(), loadMembers(), loadRepos(), loadSprints()]);
+  const currentUser = JSON.parse(localStorage.getItem("user"));
+  if (!currentUser || currentUser.role === "member") {
+    router.push({ name: "projects" });
+    return;
+  }
+  await Promise.all([loadProject(), loadMembers(), loadRepos(), loadSprints(), loadTeams()]);
 });
 </script>
 
@@ -193,7 +456,7 @@ onMounted(async () => {
           <div class="mt-2 text-body-2 text-grey-darken-1">
             <span class="subheader">START</span>
             {{ formatDate(project.startDate) }}
-            &nbsp;|&nbsp;
+            &​nbsp;|&​nbsp;
             <span class="subheader">END</span>
             {{ formatDate(project.endDate) }}
           </div>
@@ -207,6 +470,8 @@ onMounted(async () => {
         <v-tab value="Summary">Summary</v-tab>
         <v-tab value="Sprints">Sprints</v-tab>
         <v-tab value="Team">Teams</v-tab>
+        <v-tab value="User Stories">User Stories</v-tab>
+        <v-tab value="Acceptance Criteria">Acceptance Criteria</v-tab>
         <v-tab value="Repositories">Repositories</v-tab>
         <v-tab value="Activity">Activity</v-tab>
       </v-tabs>
@@ -220,7 +485,7 @@ onMounted(async () => {
               <div class="subheader">
                 TEAMS
               </div>
-              <div class="text-h4 font-weight-bold">—</div>
+              <div class="text-h4 font-weight-bold">{{ teams.length }}</div>
               <div class="text-body-2 text-grey-darken-1">
                 working on this project
               </div>
@@ -283,50 +548,127 @@ onMounted(async () => {
       </v-window-item>
 
       <v-window-item value="Sprints">
-        <v-card class="rounded-lg elevation-5 pa-4">
-          <div v-if="sprints.length">
-            <v-list>
-              <v-list-item v-for="s in sprints" :key="s.id">
-                <v-list-item-title>
-                  {{ s.name || `Sprint ${s.id}` }}
-                </v-list-item-title>
-                <v-list-item-subtitle>
-                  {{ formatDate(s.startDate) }} – {{ formatDate(s.endDate) }}
-                </v-list-item-subtitle>
-              </v-list-item>
-            </v-list>
+        <div class="d-flex justify-space-between align-center mb-4">
+          <div class="text-body-1">
+            {{ sprints.length }} sprint{{ sprints.length === 1 ? "" : "s" }} in this project
           </div>
-          <v-alert v-else type="info" variant="tonal">
-            No sprints yet. Sprint creation will be handled in a separate
-            ticket.
-          </v-alert>
-        </v-card>
+          <v-btn
+            color="primary"
+            prepend-icon="mdi-plus"
+            @click="openSprintDialog()"
+          >
+            Add Sprint
+          </v-btn>
+        </div>
+
+        <v-row>
+          <v-col v-for="s in sprints" :key="s.id" cols="12" md="6" lg="4">
+            <v-card class="rounded-lg elevation-2 pa-4">
+              <div class="d-flex justify-space-between align-start">
+                <div>
+                  <div class="text-h6 font-weight-bold">
+                    {{ s.name || `Sprint ${s.id}` }}
+                  </div>
+                  <v-chip
+                    size="small"
+                    :color="sprintStatusColor(s)"
+                    class="mt-2 mb-2"
+                  >
+                    {{ sprintStatus(s) }}
+                  </v-chip>
+                  <div class="text-body-2 text-grey-darken-1">
+                    {{ formatDate(s.startDate) }} – {{ formatDate(s.endDate) }}
+                  </div>
+                </div>
+                <v-menu>
+                  <template v-slot:activator="{ props }">
+                    <v-btn
+                      icon="mdi-dots-vertical"
+                      variant="text"
+                      size="small"
+                      v-bind="props"
+                    ></v-btn>
+                  </template>
+                  <v-list>
+                    <v-list-item @click="openSprintDialog(s)">
+                      <v-list-item-title>Edit</v-list-item-title>
+                    </v-list-item>
+                    <v-list-item @click="deleteSprint(s.id)">
+                      <v-list-item-title class="text-error">
+                        Delete
+                      </v-list-item-title>
+                    </v-list-item>
+                  </v-list>
+                </v-menu>
+              </div>
+            </v-card>
+          </v-col>
+        </v-row>
+
+        <v-alert
+          v-if="sprints.length === 0"
+          type="info"
+          variant="tonal"
+          class="mt-4"
+        >
+          No sprints yet.
+        </v-alert>
       </v-window-item>
 
       <v-window-item value="Team">
-        <v-card class="rounded-lg elevation-5 pa-4">
-          <v-list>
-            <v-list-item v-for="m in members" :key="m.id">
-              <template #prepend>
-                <v-avatar
-                  :color="m.role === 'lead' ? 'primary' : 'grey'"
-                  class="font-weight-bold"
-                >
-                  {{ getInitials(m.user) }}
+        <div class="d-flex justify-space-between align-center mb-4">
+          <div>
+            <div class="text-h6 font-weight-bold">Teams on this project</div>
+          </div>
+          <v-btn color="primary" prepend-icon="mdi-plus" @click="openNewTeamDialog">New Team</v-btn>
+        </div>
+
+        <v-alert v-if="teams.length === 0" type="info" variant="tonal">No teams yet.</v-alert>
+
+        <v-card v-for="team in teams" :key="team.id" class="rounded-lg elevation-2 mb-3" @click="toggleExpandTeam(team.id)" style="cursor: pointer">
+          <div class="d-flex align-center pa-4">
+            <v-avatar color="secondary" size="40" class="mr-4">
+              <v-icon>mdi-account-group</v-icon>
+            </v-avatar>
+            <div class="flex-grow-1">
+              <div class="font-weight-bold">{{ team.name }}</div>
+              <div class="text-caption text-grey-darken-1">{{ team.description || "No description" }}</div>
+            </div>
+          </div>
+
+          <v-expand-transition>
+            <div v-show="expandedTeamId === team.id">
+              <v-divider />
+              <div v-if="(team.member || []).length === 0" class="px-4 py-3 text-body-2 text-grey-darken-1">
+                No members in this team.
+              </div>
+              <div
+                v-for="m in (team.member || [])"
+                :key="m.id"
+                class="d-flex align-center px-4 py-3"
+              >
+                <v-avatar color="primary" size="36" class="font-weight-bold mr-3">
+                  {{ getInitialsFromUser(m.user) }}
                 </v-avatar>
-              </template>
-              <v-list-item-title
-                >{{ m.user.firstName }} {{ m.user.lastName }}</v-list-item-title
-              >
-              <v-list-item-subtitle
-                >{{ m.user.email }} · {{ m.role }}</v-list-item-subtitle
-              >
-            </v-list-item>
-            <v-list-item v-if="members.length === 0">
-              <v-list-item-title>No members assigned yet.</v-list-item-title>
-            </v-list-item>
-          </v-list>
+                <div class="flex-grow-1">
+                  <div class="font-weight-bold">{{ m.user.firstName }} {{ m.user.lastName }}</div>
+                  <div class="text-caption text-grey-darken-1">{{ m.user.email }}</div>
+                </div>
+                <v-chip size="small" variant="tonal">Team Member</v-chip>
+              </div>
+              <div class="d-flex ga-2 px-4 pb-4">
+                <button @click.stop="openEditTeamDialog(team)" class="editButtonStyle">Edit</button>
+                <button @click.stop="deleteTeam(team.id)" class="deleteButtonStyle">Delete</button>
+              </div>
+            </div>
+          </v-expand-transition>
         </v-card>
+      </v-window-item>
+
+      <v-window-item value="User Stories">
+      </v-window-item>
+
+      <v-window-item value="Acceptance Criteria">
       </v-window-item>
 
       <v-window-item value="Repositories">
@@ -379,9 +721,6 @@ onMounted(async () => {
       </v-window-item>
 
       <v-window-item value="Activity">
-        <v-alert type="info" variant="tonal"
-          >Activity feed will be handled in a separate ticket.</v-alert
-        >
       </v-window-item>
     </v-window>
 
@@ -459,6 +798,63 @@ onMounted(async () => {
           </v-col>
         </v-row>
 
+        <div class="subheader mt-4 mb-1 d-flex justify-space-between align-center">
+          <span>MEMBERS</span>
+          <span v-if="editingMembers.length" class="text-caption text-grey-darken-1">
+            {{ editingMembers.length }} member{{ editingMembers.length > 1 ? "s" : "" }}
+          </span>
+        </div>
+
+        <div
+          v-for="(m, i) in editingMembers"
+          :key="m.user.id"
+          class="d-flex align-center mb-2 pa-2 rounded-lg"
+          style="background: #f5f5f5"
+        >
+          <div class="member-avatar mr-3">{{ getInitials(m.user) }}</div>
+          <span class="flex-grow-1 text-body-2">{{ m.user.firstName }} {{ m.user.lastName }}</span>
+          <v-select
+            v-model="m.role"
+            :items="['lead', 'member']"
+            variant="outlined"
+            density="compact"
+            rounded="lg"
+            hide-details
+            style="max-width: 130px"
+            class="mr-2"
+          />
+          <v-btn icon variant="text" size="small" @click="removeEditMember(i)">
+            <v-icon size="18">mdi-close</v-icon>
+          </v-btn>
+        </div>
+
+        <v-text-field
+          v-model="editMemberSearch"
+          placeholder="Search to add members..."
+          variant="outlined"
+          density="comfortable"
+          rounded="lg"
+          bg-color="grey-lighten-4"
+          class="mt-2 mb-1"
+          hide-details
+        />
+        <v-card v-if="filteredEditUsers.length" class="mt-1 rounded-lg" elevation="3">
+          <v-list density="compact">
+            <v-list-item
+              v-for="u in filteredEditUsers"
+              :key="u.id"
+              @click="addEditMember(u)"
+              style="cursor: pointer"
+            >
+              <template #prepend>
+                <div class="member-avatar mr-3">{{ getInitials(u) }}</div>
+              </template>
+              <v-list-item-title>{{ u.firstName }} {{ u.lastName }}</v-list-item-title>
+              <v-list-item-subtitle>{{ u.email }}</v-list-item-subtitle>
+            </v-list-item>
+          </v-list>
+        </v-card>
+
       </v-card-text>
 
       <v-card-actions class="px-4 pb-4 justify-end">
@@ -474,6 +870,183 @@ onMounted(async () => {
       </v-card-actions>
     </v-card>
   </v-dialog>
+
+  <v-dialog v-model="sprintDialog" max-width="550">
+    <v-card class="rounded-xl pa-2">
+      <v-card-title
+        class="d-flex justify-space-between align-center px-4 pt-4 pb-2"
+      >
+        <span class="text-h6 font-weight-bold">
+          {{ sprintForm.id ? "Edit Sprint" : "New Sprint" }}
+        </span>
+        <v-btn icon variant="text" @click="sprintDialog = false">
+          <v-icon>mdi-close</v-icon>
+        </v-btn>
+      </v-card-title>
+
+      <v-card-text class="px-4">
+        <div class="subheader mb-1">SPRINT NAME</div>
+        <v-text-field
+          v-model="sprintForm.name"
+          variant="outlined"
+          density="comfortable"
+          rounded="lg"
+          bg-color="grey-lighten-4"
+          class="mb-1"
+          hide-details
+        ></v-text-field>
+
+        <v-row class="mt-2" no-gutters>
+          <v-col cols="6" class="pr-2">
+            <div class="subheader mb-1">START DATE</div>
+            <v-text-field
+              v-model="sprintForm.startDate"
+              type="date"
+              :min="today"
+              variant="outlined"
+              density="comfortable"
+              rounded="lg"
+              bg-color="grey-lighten-4"
+              hide-details
+            ></v-text-field>
+          </v-col>
+          <v-col cols="6" class="pl-2">
+            <div class="subheader mb-1">END DATE</div>
+            <v-text-field
+              v-model="sprintForm.endDate"
+              type="date"
+              :min="sprintForm.startDate || today"
+              variant="outlined"
+              density="comfortable"
+              rounded="lg"
+              bg-color="grey-lighten-4"
+              hide-details
+            ></v-text-field>
+          </v-col>
+        </v-row>
+      </v-card-text>
+
+      <v-card-actions class="px-4 pb-4 justify-end">
+        <v-btn variant="text" @click="sprintDialog = false">Cancel</v-btn>
+        <v-btn
+          color="primary"
+          variant="flat"
+          class="rounded-lg px-6"
+          @click="saveSprint"
+        >
+          {{ sprintForm.id ? "Save Changes" : "Create Sprint" }}
+        </v-btn>
+      </v-card-actions>
+    </v-card>
+  </v-dialog>
+
+  <v-dialog v-model="teamDialog" max-width="520">
+    <v-card class="rounded-xl pa-2">
+      <v-card-title class="d-flex justify-space-between align-center px-4 pt-4 pb-2">
+        <span class="text-h6 font-weight-bold">{{ teamDialogMode === "create" ? "New Team" : "Edit Team" }}</span>
+        <v-btn icon variant="text" @click="teamDialog = false"><v-icon>mdi-close</v-icon></v-btn>
+      </v-card-title>
+      <v-card-text class="px-4">
+        <div class="subheader mb-1">TEAM NAME</div>
+        <v-text-field
+          v-model="teamForm.name"
+          placeholder="e.g. Frontend Group"
+          variant="outlined"
+          density="comfortable"
+          rounded="lg"
+          bg-color="grey-lighten-4"
+          class="mb-1"
+          hide-details
+        />
+        <div class="subheader mt-3 mb-1">DESCRIPTION</div>
+        <v-text-field
+          v-model="teamForm.description"
+          placeholder="What does this team focus on?"
+          variant="outlined"
+          density="comfortable"
+          rounded="lg"
+          bg-color="grey-lighten-4"
+          class="mb-1"
+          hide-details
+        />
+        <div class="subheader mt-3 mb-1">MEMBERS</div>
+
+        <div
+          v-for="m in selectedTeamMemberDetails"
+          :key="m.userId"
+          class="d-flex align-center mb-2 pa-2 rounded-lg"
+          style="background: #f5f5f5"
+        >
+          <div class="member-avatar mr-3">{{ getInitialsFromUser(m.user) }}</div>
+          <span class="flex-grow-1 text-body-2">{{ m.user.firstName }} {{ m.user.lastName }}</span>
+          <v-btn icon variant="text" size="small" @click="removeTeamMember(m.userId)">
+            <v-icon size="18">mdi-close</v-icon>
+          </v-btn>
+        </div>
+
+        <v-alert
+          v-if="members.length === 0"
+          type="info"
+          variant="tonal"
+          density="compact"
+          class="mb-2"
+        >
+          No members assigned to this project yet. Add members to the project first.
+        </v-alert>
+
+        <v-text-field
+          v-else
+          v-model="memberSearch"
+          placeholder="Search by name or email..."
+          variant="outlined"
+          density="comfortable"
+          rounded="lg"
+          bg-color="grey-lighten-4"
+          class="mb-1"
+          hide-details
+        />
+
+        <v-card v-if="filteredProjectMembers.length" class="mt-1 rounded-lg" elevation="3">
+          <v-list density="compact">
+            <v-list-item
+              v-for="m in filteredProjectMembers"
+              :key="m.id"
+              @click="addTeamMember(m)"
+              style="cursor: pointer"
+            >
+              <template #prepend>
+                <div class="member-avatar mr-3">{{ getInitialsFromUser(m.user) }}</div>
+              </template>
+              <v-list-item-title>{{ m.user.firstName }} {{ m.user.lastName }}</v-list-item-title>
+              <v-list-item-subtitle>{{ m.user.email }}</v-list-item-subtitle>
+            </v-list-item>
+          </v-list>
+        </v-card>
+      </v-card-text>
+      <v-card-actions class="px-4 pb-4 justify-end">
+        <v-btn variant="text" @click="teamDialog = false">Cancel</v-btn>
+        <v-btn color="primary" variant="flat" class="rounded-lg px-6" @click="saveTeam">
+          {{ teamDialogMode === "create" ? "Create Team" : "Save Changes" }}
+        </v-btn>
+      </v-card-actions>
+    </v-card>
+  </v-dialog>
+
   </v-container>
 </template>
 
+<style scoped>
+.member-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background-color: #9e9e9e;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 0.75rem;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+</style>

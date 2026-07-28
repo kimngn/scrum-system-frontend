@@ -102,7 +102,7 @@
       </v-row>
 
       <!---->
-      <UserCard v-for="user in users" :key="user.id" :user="user" />
+      <UserCard v-for="user in users" :key="user.id" :user="user" @refresh="getUsers" />
       <!---->
 
       <v-dialog persistent v-model="isAdd" width="800">
