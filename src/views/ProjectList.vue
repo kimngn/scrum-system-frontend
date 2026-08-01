@@ -645,13 +645,21 @@
               <v-col class="pl-6" cols="6">
                 <v-row class="mt-3 subheader">START DATE</v-row>
                 <v-row>{{
-                  p.startDate ? new Date(p.startDate).toLocaleDateString(undefined, { timeZone: "UTC" }) : "—"
+                  p.startDate
+                    ? new Date(p.startDate).toLocaleDateString(undefined, {
+                        timeZone: "UTC",
+                      })
+                    : "—"
                 }}</v-row>
               </v-col>
               <v-col class="pl-6" cols="6">
                 <v-row class="subheader">END DATE</v-row>
                 <v-row>{{
-                  p.endDate ? new Date(p.endDate).toLocaleDateString(undefined, { timeZone: "UTC" }) : "—"
+                  p.endDate
+                    ? new Date(p.endDate).toLocaleDateString(undefined, {
+                        timeZone: "UTC",
+                      })
+                    : "—"
                 }}</v-row>
               </v-col>
             </v-row>
@@ -801,6 +809,18 @@
               density="comfortable"
               rounded="lg"
               placeholder="https://github.com/owner/repositoryName"
+              bg-color="grey-lighten-4"
+              class="mb-1"
+              hide-details
+            ></v-text-field>
+
+            <div class="form-label mt-3">TEAM PERSONAL ACCESS TOKEN</div>
+            <v-text-field
+              v-model="project.repoUrl"
+              variant="outlined"
+              density="comfortable"
+              rounded="lg"
+              placeholder="github_pat_XXX..."
               bg-color="grey-lighten-4"
               class="mb-1"
               hide-details

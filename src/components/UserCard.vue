@@ -63,7 +63,7 @@
         }
         snackbar.value.value = true;
         snackbar.value.color = "green";
-        snackbar.value.text = `${newUser.value.firstName} ${newUser.value.lastName}  updated successfully!`;
+        snackbar.value.text = `${newUser.value.firstName} ${newUser.value.lastName} updated successfully!`;
         emit("refresh");
         isEdit.value = false;
       })
@@ -308,6 +308,13 @@
     color: maroon;
   }
 
+  .form-label {
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.07em;
+    color: #8b1a35;
+    margin-bottom: 4px;
+  }
   /* try not to affect all v-chips */
   .vchipStyle.v-chip {
     background-color: transparent;
