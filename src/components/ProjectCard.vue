@@ -14,7 +14,10 @@
     },
   });
 
-  const project = ref(props.project);
+  // Call back to parent
+  const emit = defineEmits(["refresh"]); // to help fix rendering issue
+
+  const project = computed(() => props.project); // to fix rendering issue
   const projectDetails = ref(false);
   const user = ref(null);
   const isEdit = ref(false);
@@ -149,6 +152,16 @@
     await getRepos();
   });
 
+  async function getProject() {
+    await ProjectServices.getProject(project.value.id)
+      .then((response) => {
+        project.value = response.data;
+      })
+      .catch((error) => {
+        console.log(error);
+      });
+  }
+
   async function getRepos() {
     await RepoServices.getReposByProjectId(project.value.id) // one project per card, so this should work
       .then((response) => {
@@ -189,6 +202,7 @@
         }
         // update and validate Repo if URL format is correct
         await updateRepo(repo);
+
         console.log("Update repo success!");
       }
       // addRepo if updating repo is successful
@@ -243,7 +257,9 @@
       repos.value = response.data;
     }
 
-    await getProjects();
+    await getRepos();
+    await getProject();
+    emit("refresh");
   }
 
   // DELETE PROJECT
@@ -270,7 +286,8 @@
           error.response?.data?.message || "Failed to delete project",
         );
       });
-    await getProjects();
+
+    emit("refresh");
   }
 
   function toggleIsAddRepo() {
@@ -346,6 +363,7 @@
         throw error; // keep original backend error
       }
     }
+    await getRepos();
   }
 
   // UPDATE REPO
@@ -374,6 +392,7 @@
         console.log("Failed to update repo");
         throw error;
       });
+    await getRepos();
   }
 
   // DELETE REPO
@@ -395,9 +414,7 @@
         );
       });
 
-    // fixes the bug where ALL repos get deleted (visually, not actually)
-    const response = await RepoServices.getReposByProjectId(projectId);
-    repos.value = response.data;
+    await getRepos();
   }
 
   function closeEdit() {
@@ -469,7 +486,7 @@
           <v-col class="pl-6" cols="12">
             <v-row class="mt-3 subheader">REPOS</v-row>
             <div class="d-flex flex-wrap gap-2 mt-10">
-              <Repo v-for="repo in repos" :repo="repo" />
+              <Repo v-for="repo in repos" :key="repo.id" :repo="repo" />
             </div>
           </v-col>
         </v-row>
@@ -490,7 +507,17 @@
             v-if="$parent.user && $parent.user.role !== 'member'"
             cols="auto"
           >
-            <v-btn color="primary" @click.stop="emit()"> View Workspace </v-btn>
+            <v-btn
+              color="primary"
+              @click.stop="
+                router.push({
+                  name: 'project-workspace',
+                  params: { id: p.id },
+                })
+              "
+            >
+              View Workspace
+            </v-btn>
           </v-col>
         </v-row>
       </v-card-text>
