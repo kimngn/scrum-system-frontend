@@ -258,55 +258,6 @@
     }
   }
 
-  // UPDATE REPO
-  async function updateRepo(repo) {
-    try {
-      // extract repo name
-      const urlParts = repo.repoUrl.split("/");
-      const repoName = urlParts[urlParts.length - 1];
-
-      const editingRepo = {
-        id: repo.id,
-        name: repoName,
-        repoUrl: repo.repoUrl,
-        projectId: repo.projectId,
-      };
-
-      // update repo
-      await RepoServices.updateRepo(editingRepo.id, editingRepo);
-
-      // save into history
-      newAction.value = {
-        action: "edit",
-        userId: user.value.id,
-        entityName: repoName,
-        entityId: repo.projectId,
-        entityType: "repo",
-        oldValue: repo.repoUrl,
-        newValue: editingRepo.repoUrl,
-        fieldName: "URL",
-      };
-      recordAction();
-
-      showSnackbar("green", "Repository updated");
-    } catch (err) {
-      console.error(err);
-      showSnackbar("error", "Failed to update repository");
-    }
-  }
-
-  // DELETE REPO
-  async function deleteRepo(repoId, projectId) {
-    try {
-      await RepoServices.deleteRepo(repoId);
-      // await getRepos(projectId);
-      showSnackbar("green", "Repository deleted");
-    } catch (err) {
-      console.error(err);
-      showSnackbar("error", "Failed to delete repository");
-    }
-  }
-
   // functions for member selection
   function getInitials(u) {
     return (u.firstName[0] + u.lastName[0]).toUpperCase();

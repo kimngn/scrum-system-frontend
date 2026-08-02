@@ -188,6 +188,8 @@
     const projectId = newProject.value.id;
 
     try {
+      console.log("Repos length:" + repos.value.length);
+
       for (const repo of repos.value) {
         // check repo URL format
         const match = repo.repoUrl.match(
@@ -200,11 +202,13 @@
           hasError = true;
           break;
         }
+
         // update and validate Repo if URL format is correct
         await updateRepo(repo);
 
         console.log("Update repo success!");
       }
+
       // addRepo if updating repo is successful
       try {
         await addRepo(newProject.value);
@@ -217,6 +221,7 @@
         return;
       }
       // updateProject if updating and adding repo is successful
+
       await updateProject();
       console.log("Update project success!");
 
@@ -339,7 +344,7 @@
       newRepo.value.name = repoName;
       newRepo.value.repoUrl = newRepoInput.value;
       newRepo.value.projectId = project.id;
-
+      newRepo.value.token = newRepoTokenInput.value;
       // check for correct URL format
       const match = newRepo.value.repoUrl.match(
         /^https:\/\/github\.com\/([^\/]+)\/([^\/]+)$/,
@@ -361,6 +366,7 @@
         newAction.value.entityName = newRepo.value.name;
         newAction.value.entityId = project.id;
         newAction.value.entityType = "repo";
+
         recordAction();
 
         // find project associated with projectId
@@ -368,7 +374,6 @@
         throw error; // keep original backend error
       }
     }
-    await getRepos();
   }
 
   // UPDATE REPO
@@ -380,16 +385,11 @@
 
     // fill in repo being modified
 
-    newRepo.value.id = repo.id;
-    newRepo.value.name = repoName;
-    newRepo.value.repoUrl = repo.repoUrl;
-    newRepo.value.projectId = repo.projectId; // projectId should be the same
-    newRepo.value.token = newRepoTokenInput.value;
-    console.log("REPO ID:" + newRepo.value.name);
-    console.log("REPO NAME:" + newRepo.value.name);
-    console.log("NEW REPO URL:" + newRepo.value.repoUrl);
-    console.log("REPO PROJECT ID:" + newRepo.value.projectId);
-    await RepoServices.updateRepo(newRepo.value.id, newRepo.value)
+    repo.id = repo.id;
+    repo.name = repoName;
+    repo.token = newRepoTokenInput.value;
+
+    await RepoServices.updateRepo(repo.id, repo)
       .then(() => {
         console.log("Updated repository");
       })
@@ -397,7 +397,6 @@
         console.log("Failed to update repo");
         throw error;
       });
-    await getRepos();
   }
 
   // DELETE REPO
