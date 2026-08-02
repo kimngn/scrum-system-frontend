@@ -350,6 +350,11 @@
       }
 
       try {
+        await RepoServices.validateRepo(
+          newRepoInput.value,
+          newRepoTokenInput.value,
+        );
+
         await RepoServices.addRepo(newRepo.value);
         newAction.value.action = "create";
         newAction.value.userId = user.value.id;
@@ -648,6 +653,7 @@
         <v-text-field
           v-if="repos.length > 0 || isAddRepo"
           v-model="newRepoTokenInput"
+          type="password"
           variant="outlined"
           density="comfortable"
           rounded="lg"

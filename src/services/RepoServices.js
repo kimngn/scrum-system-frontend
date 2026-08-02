@@ -13,4 +13,8 @@ export default {
   deleteRepo(repoId) {
     return apiClient.delete("repos/" + repoId);
   },
+
+  validateRepo(repoUrl, token) {
+    return apiClient.post("github/validate", { repoUrl, token }); // passing in raw parameters because this isn't saved in the database
+  },
 };

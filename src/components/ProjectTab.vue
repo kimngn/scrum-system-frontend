@@ -122,6 +122,7 @@
   // CREATE PROJECT
 
   async function createProject() {
+    let projectId;
     if (newProject.value.startDate && newProject.value.startDate < today) {
       showSnackbar("error", "Start date cannot be in the past.");
       return;
@@ -141,7 +142,7 @@
         ...newProject.value,
         userId: user.value.id,
       });
-      const projectId = response.data.id;
+      projectId = response.data.id;
       const projectName = response.data.name;
       console.log("RESPONDED WITH PROJECT: " + projectId);
 
@@ -174,6 +175,12 @@
         newRepo.value.repoUrl = newProject.value.repoUrl;
         newRepo.value.projectId = projectId;
         newRepo.value.token = newProject.value.token;
+
+        // validate repo URL with token
+        await RepoServices.validateRepo(
+          newProject.value.repoUrl,
+          newProject.value.token,
+        );
 
         // create repo
         await RepoServices.addRepo(newRepo.value);
@@ -474,6 +481,7 @@
           <div class="form-label mt-3">TEAM'S PERSONAL ACCESS TOKEN</div>
           <v-text-field
             v-model="newProject.token"
+            type="password"
             variant="outlined"
             density="comfortable"
             rounded="lg"
