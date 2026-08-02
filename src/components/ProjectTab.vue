@@ -120,6 +120,7 @@
   }
 
   // CREATE PROJECT
+
   async function createProject() {
     if (newProject.value.startDate && newProject.value.startDate < today) {
       showSnackbar("error", "Start date cannot be in the past.");
@@ -133,6 +134,7 @@
       showSnackbar("error", "End date must be after start date.");
       return;
     }
+
     try {
       // create project and get project attributes from response
       const response = await ProjectServices.addProject({
@@ -142,55 +144,52 @@
       const projectId = response.data.id;
       const projectName = response.data.name;
       console.log("RESPONDED WITH PROJECT: " + projectId);
+
+      // add to project history
+      newAction.value = {
+        action: "create",
+        userId: user.value.id,
+        entityName: projectName,
+        entityId: projectId,
+        entityType: "project",
+      };
+      await recordAction();
+
       if (newProject.value.repoUrl) {
-        try {
-          // extract repoName from the URL
-          const urlParts = newProject.value.repoUrl.split("/");
-          const repoName = urlParts[urlParts.length - 1]; // repoName is at index 4
-          console.log(repoName);
-
-          // fill in newRepo
-          newRepo.value.name = repoName;
-          newRepo.value.repoUrl = newProject.value.repoUrl;
-          newRepo.value.projectId = projectId;
-          newRepo.value.token = newProject.value.token;
-
-          // check for correct URL format
-          const match = newProject.value.repoUrl.match(
-            /^https:\/\/github\.com\/([^\/]+)\/([^\/]+)$/,
-          ); // returns boolean
-
-          if (!match) {
-            throw new Error("Invalid GitHub URL format");
-          }
-
-          try {
-            // just directly calling RepoServices.addRepo
-            await RepoServices.addRepo(newRepo.value);
-
-            newAction.value.action = "create";
-            newAction.value.userId = user.value.id;
-            newAction.value.entityName = repoName;
-            newAction.value.entityId = projectId;
-            newAction.value.entityType = "repo";
-            recordAction();
-          } catch (error) {
-            throw new Error(
-              error.response?.data?.message || "Failed to create repo",
-            );
-          }
-        } catch (error) {
-          // if there's an error creating repo/validating URL, delete the ProjectService
+        // validate repo URL
+        const match = newProject.value.repoUrl.match(
+          /^https:\/\/github\.com\/([^\/]+)\/([^\/]+)$/,
+        );
+        if (!match) {
+          // delete project and show error if there is an issue
           await ProjectServices.deleteProject(projectId);
-
-          showSnackbar(
-            "error",
-            error.response?.data?.message ||
-              "Please enter a valid Github Repo URL.",
-          );
+          showSnackbar("error", "Please enter a valid Github Repo URL.");
           return;
         }
+
+        // extract repo name
+        const urlParts = newProject.value.repoUrl.split("/");
+        const repoName = urlParts[urlParts.length - 1];
+        newRepo.value.name = repoName;
+        newRepo.value.repoUrl = newProject.value.repoUrl;
+        newRepo.value.projectId = projectId;
+        newRepo.value.token = newProject.value.token;
+
+        // create repo
+        await RepoServices.addRepo(newRepo.value);
+
+        // add to project history
+        newAction.value = {
+          action: "create",
+          userId: user.value.id,
+          entityName: repoName,
+          entityId: projectId, // or the new repo id if returned
+          entityType: "repo",
+        };
+        await recordAction();
       }
+
+      // add members to the project
       for (const m of selectedMembers.value) {
         await ProjectMembershipServices.addMembership({
           userId: m.user.id,
@@ -198,22 +197,20 @@
           role: m.role,
         });
       }
-      // fill and create new record for creating project
-      newAction.value.action = "create";
-      newAction.value.userId = user.value.id;
-      newAction.value.entityName = projectName;
-      newAction.value.entityId = projectId;
-      newAction.value.entityType = "project";
-      recordAction();
 
       showSnackbar("green", "Project created successfully!");
       closeAdd();
     } catch (error) {
+      // delete project if there's issues
+      if (projectId) {
+        await ProjectServices.deleteProject(projectId);
+      }
       showSnackbar(
         "error",
         error.response?.data?.message || "Failed to create project",
       );
     }
+
     await getProjects();
   }
 

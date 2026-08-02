@@ -1,13 +1,14 @@
 <script setup>
   import { ref, onMounted, computed, watch } from "vue";
   import Repo from "../components/Repo.vue";
-
+  import { useRouter } from "vue-router";
   import ProjectServices from "../services/ProjectServices.js";
   import RepoServices from "../services/RepoServices.js";
   import UserServices from "../services/UserServices.js";
   import HistoryServices from "../services/HistoryServices.js";
   import ProjectMembershipServices from "../services/ProjectMembershipServices.js";
 
+  const router = useRouter();
   const props = defineProps({
     project: {
       required: true,
@@ -40,9 +41,8 @@
     name: "",
     description: "",
     status: "active",
-    startDate: null,
-    endDate: null,
-    repoUrl: "",
+    startDate: "",
+    endDate: "",
   });
 
   // New Repo
@@ -379,7 +379,7 @@
     newRepo.value.name = repoName;
     newRepo.value.repoUrl = repo.repoUrl;
     newRepo.value.projectId = repo.projectId; // projectId should be the same
-    newRepo.value.token = newRepoTokenInput;
+    newRepo.value.token = newRepoTokenInput.value;
     console.log("REPO ID:" + newRepo.value.name);
     console.log("REPO NAME:" + newRepo.value.name);
     console.log("NEW REPO URL:" + newRepo.value.repoUrl);
@@ -503,16 +503,13 @@
               Delete
             </button>
           </v-col>
-          <v-col
-            v-if="$parent.user && $parent.user.role !== 'member'"
-            cols="auto"
-          >
+          <v-col v-if="user && user.role !== 'member'" cols="auto">
             <v-btn
               color="primary"
               @click.stop="
                 router.push({
                   name: 'project-workspace',
-                  params: { id: p.id },
+                  params: { id: project.id },
                 })
               "
             >

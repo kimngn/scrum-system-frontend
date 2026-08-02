@@ -703,8 +703,8 @@
                 >
                   View Workspace
                 </v-btn>
-              </v-col>
-            </v-row>
+              </v-col> </v-row
+            >user
           </v-card-text>
         </v-expand-transition>
       </v-card>
