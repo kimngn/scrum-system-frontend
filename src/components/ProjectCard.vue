@@ -18,6 +18,7 @@
   // Call back to parent
   const emit = defineEmits(["refresh"]); // to help fix rendering issue
 
+  const subheaderStyle = ref("subheaderStyle");
   const project = computed(() => props.project); // to fix rendering issue
   const projectDetails = ref(false);
   const user = ref(null);
@@ -495,7 +496,11 @@
           </v-col>
         </v-row>
         <v-row class="mb-2" justify="space-between" align="center">
-          <v-col cols="auto" class="d-flex ga-2">
+          <v-col
+            v-if="user && (user.role === 'admin' || user.role === 'lead')"
+            cols="auto"
+            class="d-flex ga-2"
+          >
             <button @click.stop="openEdit(project)" class="editButtonStyle">
               Edit
             </button>
@@ -774,7 +779,11 @@
   </v-snackbar>
 </template>
 
-<style scoped>
+<style>
+  .subheader {
+    font-weight: bolder;
+    color: maroon;
+  }
   .form-label {
     font-size: 0.72rem;
     font-weight: 700;

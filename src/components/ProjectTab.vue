@@ -557,7 +557,7 @@
   </v-snackbar>
 </template>
 
-<style scoped>
+<style>
   .form-label {
     font-size: 0.72rem;
     font-weight: 700;
