@@ -1,18 +1,24 @@
 <script setup>
-  import { onMounted } from "vue";
-  import { ref } from "vue";
-  import { useRouter } from "vue-router";
-  import { Tabs, Tab } from "super-vue3-tabs";
+  import { onMounted, ref, watch } from "vue";
+  import { useRouter, useRoute } from "vue-router";
   import UserServices from "../services/UserServices.js";
   import ProjectTab from "../components/ProjectTab.vue";
   import UserTab from "../components/UserTab.vue";
 
   const router = useRouter();
+  const route = useRoute();
   const users = ref([]);
   const user = ref(null);
   const snackbar = ref({ value: false, color: "", text: "" });
 
-  const systemLogsButtonStyle = ref("systemLogsButton");
+  const tab = ref(route.query.tab || "Users");
+
+  watch(
+    () => route.query.tab,
+    (newTab) => {
+      if (newTab) tab.value = newTab;
+    }
+  );
 
   onMounted(async () => {
     user.value = JSON.parse(localStorage.getItem("user"));
@@ -53,35 +59,26 @@
     await getUsers();
   }
 
-  function navigateToSystemLogs() {
-    router.push({ name: "systemlogs" });
-  }
   function showSnackbar(color, text) {
     snackbar.value = { value: true, color, text };
   }
 </script>
 
 <template>
-  <!-- https://mdsaban.com/packages/super-vue3-tabs-component/demo/ -->
   <v-container>
-    <Tabs>
-      <Tab value="Users">
-        <template #icon>
-          <i class="fas fa-home"></i>
-        </template>
-        <UserTab />
-      </Tab>
-      <Tab value="Projects">
-        <template #icon>
-          <i class="fas fa-user"></i>
-        </template>
-        <ProjectTab />
-      </Tab>
-    </Tabs>
+    <v-tabs v-model="tab" color="primary" class="mb-4">
+      <v-tab value="Users">Users</v-tab>
+      <v-tab value="Projects">Projects</v-tab>
+    </v-tabs>
 
-    <v-btn class="systemLogsButton" @click="navigateToSystemLogs()"
-      >System Logs</v-btn
-    >
+    <v-window v-model="tab">
+      <v-window-item value="Users">
+        <UserTab />
+      </v-window-item>
+      <v-window-item value="Projects">
+        <ProjectTab />
+      </v-window-item>
+    </v-window>
 
     <v-snackbar v-model="snackbar.value" rounded="pill">
       {{ snackbar.text }}
@@ -97,12 +94,4 @@
   </v-container>
 </template>
 
-<style>
-  .systemLogsButton {
-    position: fixed;
-    bottom: 20px;
-    right: 20px;
-    background-color: rgb(155, 55, 55);
-    color: azure;
-  }
-</style>
+<style></style>
