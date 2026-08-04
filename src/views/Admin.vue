@@ -4,7 +4,7 @@
   import { useRouter } from "vue-router";
   import { Tabs, Tab } from "super-vue3-tabs";
   import UserServices from "../services/UserServices.js";
-  import ProjectList from "./ProjectList.vue";
+  import ProjectTab from "../components/ProjectTab.vue";
   import UserTab from "../components/UserTab.vue";
 
   const router = useRouter();
@@ -75,7 +75,7 @@
         <template #icon>
           <i class="fas fa-user"></i>
         </template>
-        <ProjectList />
+        <ProjectTab />
       </Tab>
     </Tabs>
 

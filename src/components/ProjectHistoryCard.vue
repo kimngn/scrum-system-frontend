@@ -22,8 +22,6 @@
   const deleteStyle = ref("deleteStyle");
 
   onMounted(async () => {
-    console.log("Child:", projectId);
-
     await getProjectHistoryByProjectId();
   });
 
@@ -106,7 +104,7 @@
                           </div>
                         </template>
                         <!-- DELETE -->
-                        <template v-else>
+                        <template v-else-if="item.action === 'delete'">
                           <v-icon
                             class="mx-2"
                             size="x-small"
@@ -123,6 +121,43 @@
                               item.entityType.slice(1)
                             }}
                             {{ item.entityName }} was deleted by
+                            {{ item.user.firstName }} {{ item.user.lastName }}.
+                          </div>
+                        </template>
+
+                        <!-- ADD -->
+
+                        <template v-else-if="item.action === 'add'">
+                          <v-icon
+                            class="mx-2"
+                            size="x-small"
+                            icon="mdi-plus-outline"
+                          ></v-icon
+                          ><b class="mr-2 createStyle">
+                            Added {{ item.entityType }}</b
+                          >
+                          {{ item.createdAt }}
+                          <br />
+                          <div class="ml-8">
+                            A new membership was added by
+                            {{ item.user.firstName }} {{ item.user.lastName }}.
+                          </div>
+                        </template>
+
+                        <!-- REMOVE -->
+                        <template v-else-if="item.action === 'remove'">
+                          <v-icon
+                            class="mx-2"
+                            size="x-small"
+                            icon="mdi-trash-can"
+                          ></v-icon
+                          ><b class="mr-2 deleteStyle">
+                            Removed {{ item.entityType }}
+                          </b>
+                          {{ item.createdAt }}
+                          <br />
+                          <div class="ml-8">
+                            A membership was removed by
                             {{ item.user.firstName }} {{ item.user.lastName }}.
                           </div>
                         </template>

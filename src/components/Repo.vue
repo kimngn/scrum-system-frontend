@@ -1,33 +1,29 @@
 <script setup>
   import { onMounted, ref } from "vue";
   import { useRouter } from "vue-router";
-  import RepoServices from "../services/RepoServices";
 
   const props = defineProps({
-    repos: {
+    repo: {
       required: true,
     },
   });
+
+  const currentRepo = ref(props.repo);
 
   onMounted(async () => {});
 </script>
 
 <template>
-  <v-col class="mt-4" cols="12">
-    <div class="d-flex gap-2">
-      <a
-        class="hover-link"
-        v-for="repo in props.repos"
-        :key="repo.name"
-        :href="repo.repoUrl"
-        target="_blank"
-      >
-        <v-chip class="hover-chip">
-          {{ repo.name }}
-        </v-chip>
-      </a>
-    </div>
-  </v-col>
+  <a
+    class="hover-link"
+    :key="currentRepo.name"
+    :href="currentRepo.repoUrl"
+    target="_blank"
+  >
+    <v-chip class="hover-chip">
+      {{ currentRepo.name }}
+    </v-chip>
+  </a>
 </template>
 
 <style>
