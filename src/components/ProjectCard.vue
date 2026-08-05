@@ -652,7 +652,7 @@
         </v-row>
 
         <div v-if="repos.length > 0 || isAddRepo" class="form-label mt-3">
-          TEAM'S PERSONAL ACCESS TOKEN
+          PROJECT'S PERSONAL ACCESS TOKEN
         </div>
         <v-text-field
           v-if="repos.length > 0 || isAddRepo"

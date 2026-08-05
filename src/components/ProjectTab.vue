@@ -429,7 +429,7 @@
             hide-details
           ></v-text-field>
 
-          <div class="form-label mt-3">TEAM'S PERSONAL ACCESS TOKEN</div>
+          <div class="form-label mt-3">PROJECT'S PERSONAL ACCESS TOKEN</div>
           <v-text-field
             v-model="newProject.token"
             type="password"
