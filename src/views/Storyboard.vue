@@ -5,9 +5,10 @@ import StoryboardServices from "../services/StoryboardServices.js";
 import ProjectServices from "../services/ProjectServices.js";
 import ProjectMembershipServices from "../services/ProjectMembershipServices.js";
 import StoryAssigneeServices from "../services/StoryAssigneeServices.js";
+import ProjectColumnServices from "../services/ProjectColumnServices.js";
 
-// Column ids to match the seeded columns in the backend.
-const columnDefinitions = [
+// Columns shown when the user isn't assigned to a project so the storyboard has the error snackbar.
+const fallbackColumns = [
   { id: 1, title: "Backlog" },
   { id: 2, title: "To Do" },
   { id: 3, title: "In Progress" },
@@ -48,6 +49,12 @@ const assigneeOptions = ref([]);
 const formAssignee = ref([]);
 // Ids of the story's current assignee rows when editing.
 const editingAssigneeIds = ref([]);
+const projectColumns = ref([]);
+const canManageColumns = ref(false);
+const showColumnDialog = ref(false);
+const newColumnTitle = ref("");
+const draggedColumn = ref(null);
+const hoverColumnRowId = ref(null);
 
 onMounted(async () => {
   // Gets the logged in user from local storage.
@@ -56,6 +63,7 @@ onMounted(async () => {
     router.push({ name: "login" });
     return;
   }
+  canManageColumns.value = user.value.role === "lead" || user.value.role === "admin";
 
   // Gets the user's project from the backend.
   await ProjectServices.getProjectsByUserId(user.value.id)
@@ -67,11 +75,32 @@ onMounted(async () => {
       console.log(error);
     });
 
+  // Gets the project's columns from the backend.
+  await getColumns();
   // Gets the user assignees from the backend
   await getAssignees();
   // Gets the stories from the backend.
   await getStories();
 });
+
+// Gets the columns for the project.
+async function getColumns() {
+  if (!projectId.value) {
+    // if no project use fallback.
+    projectColumns.value = fallbackColumns;
+    buildColumns();
+    return;
+  }
+
+  await ProjectColumnServices.getColumnsForProject(projectId.value)
+    .then((response) => {
+      projectColumns.value = response.data;
+      buildColumns();
+    })
+    .catch((error) => {
+      console.log(error);
+    });
+}
 
 // Gets the members of the project so they can be picked as an assignee.
 async function getAssignees() {
@@ -116,11 +145,11 @@ function buildColumns() {
   // Temp array to hold all columns before updating columns.value.
   const columnList = [];
 
-  // Creates each storyboard column using columnDefinitions.
-  for (let i = 0; i < columnDefinitions.length; i++) {
+  // Creates each storyboard column using the project's columns.
+  for (let i = 0; i < projectColumns.value.length; i++) {
     columnList.push({
-      id: columnDefinitions[i].id,
-      title: columnDefinitions[i].title,
+      id: projectColumns.value[i].id,
+      title: projectColumns.value[i].title,
 
       // Starts columns with empty story list.
       stories: [],
@@ -302,22 +331,109 @@ async function deleteStory() {
     console.log(error);
   }
 }
+
+// Saves a column's edited title.
+async function saveColumnTitle(column) {
+  await ProjectColumnServices.updateColumn(column.id, {
+    title: column.title,
+    role: user.value.role,
+  });
+  await getColumns();
+}
+
+// Adds a new column at the end.
+async function addColumn() {
+  if (newColumnTitle.value === "") {
+    return;
+  }
+
+  await ProjectColumnServices.addColumn({
+    title: newColumnTitle.value,
+    displayOrder: projectColumns.value.length + 1,
+    projectId: projectId.value,
+    role: user.value.role,
+  });
+
+  newColumnTitle.value = "";
+  await getColumns();
+}
+
+// Deletes a column.
+async function deleteColumn(columnId) {
+  await ProjectColumnServices.deleteColumn(columnId, user.value.role);
+  await getColumns();
+}
+
+// Saves the column being dragged, for reordering.
+function startColumnDrag(column) {
+  draggedColumn.value = column;
+}
+
+// Outlines the column row being dragged over.
+function dragEnterColumn(columnId) {
+  hoverColumnRowId.value = columnId;
+}
+
+
+
+// Reorders columns when one is dropped onto another.
+async function dropColumn(targetColumn) {
+  hoverColumnRowId.value = null;
+
+  if (draggedColumn.value === null || draggedColumn.value.id === targetColumn.id) {
+    draggedColumn.value = null;
+    return;
+  }
+
+  const fromIndex = projectColumns.value.indexOf(draggedColumn.value);
+  const toIndex = projectColumns.value.indexOf(targetColumn);
+
+  // Take 1 column out of the array and insert it at the new index.
+  // Splice: https://www.w3schools.com/jsref/jsref_splice.asp
+  projectColumns.value.splice(fromIndex, 1);
+  projectColumns.value.splice(toIndex, 0, draggedColumn.value);
+
+  // Saves the new display order for every column.
+  for (let i = 0; i < projectColumns.value.length; i++) {
+    await ProjectColumnServices.updateColumn(projectColumns.value[i].id, {
+      title: projectColumns.value[i].title,
+      displayOrder: i + 1,
+      role: user.value.role,
+    });
+  }
+
+  draggedColumn.value = null;
+  await getColumns();
+}
 </script>
 
 <template>
   <!-- fluid makes it use the full width. -->
   <v-container fluid>
 
-    <v-card-title class="pl-0 text-h4 font-weight-bold">
-      Storyboard
-    </v-card-title>
+    <div class="d-flex align-center">
+      <v-card-title class="pl-0 text-h4 font-weight-bold">
+        Storyboard
+      </v-card-title>
+
+      <!-- Only leads and admins can manage columns. -->
+      <v-btn
+        v-if="canManageColumns"
+        color="primary"
+        variant="outlined"
+        class="ml-4"
+        @click="showColumnDialog = true"
+      >
+        Manage Columns
+      </v-btn>
+    </div>
 
     <!-- Holds all storyboard columns in a horizontal row. -->
     <div class="storyboard-columns">
       <!-- Loops through each storyboard column and displays it. -->
       <div
         :class="{ 'dragging-active': hoverColumnId === column.id }"
-        v-for="column in columns" :key="column.title"
+        v-for="column in columns" :key="column.id"
         class="storyboard-column"
         @dragover.prevent="dragEnter(column.id)"
         @drop="dropStory(column.id)"
@@ -493,6 +609,69 @@ async function deleteStory() {
         </v-card-actions>
       </v-card>
     </v-dialog>
+
+    <!-- Manage Columns dialog, leads only. -->
+    <v-dialog v-model="showColumnDialog" width="500">
+      <v-card>
+        <v-card-title>Manage Columns</v-card-title>
+
+        <v-card-text>
+          <!-- Existing columns. -->
+          <div
+            v-for="column in projectColumns" :key="column.id"
+            :class="{ 'dragging-active': hoverColumnRowId === column.id }"
+            class="d-flex align-center mb-2 column-row"
+            draggable="true"
+            @dragstart="startColumnDrag(column)"
+            @dragover.prevent="dragEnterColumn(column.id)"
+            @drop="dropColumn(column)"
+          >
+            <v-icon icon="mdi-drag" class="mr-2" style="cursor: grab;"></v-icon>
+
+            <v-text-field
+              v-model="column.title"
+              density="compact"
+              hide-details
+              @blur="saveColumnTitle(column)"
+            ></v-text-field>
+
+            <v-btn
+              icon="mdi-delete"
+              size="small"
+              variant="text"
+              color="red"
+              class="ml-2"
+              @click="deleteColumn(column.id)"
+            ></v-btn>
+          </div>
+
+          <!-- Adds a new column at the end. -->
+          <div class="d-flex align-center mt-4">
+            <v-text-field
+              v-model="newColumnTitle"
+              label="New column title"
+              density="compact"
+              hide-details
+            ></v-text-field>
+
+            <v-btn
+              color="primary"
+              variant="text"
+              class="ml-2"
+              @click="addColumn"
+            >
+              Add
+            </v-btn>
+          </div>
+        </v-card-text>
+
+        <v-card-actions>
+          <v-spacer></v-spacer>
+          <v-btn variant="text" @click="showColumnDialog = false">Close</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
     <!-- Error snackbar for project errors. -->
     <v-snackbar
       v-model="showProjectError"
@@ -512,11 +691,19 @@ async function deleteStory() {
   gap: 16px;
   overflow-x: auto;
   align-items: flex-start;
+  width: 100%;
+  max-width: 100%;
+  /* Fills screen so scrollbar is at the bottom. */
+  height: calc(100vh - 135px);
 }
 
 .storyboard-column {
   min-width: 280px;
   max-width: 280px;
+  flex-shrink: 0;
+  /* Lets each column scroll down. */
+  height: 100%;
+  overflow-y: auto;
 }
 
 .column-header {
@@ -543,6 +730,10 @@ async function deleteStory() {
   padding-bottom: 35px;
   padding-left: 10px;
   padding-right: 10px;
+}
+
+.column-row.dragging-active {
+  padding-bottom: 4px;
 }
 .story-dialog-card {  
 transform: translateY(-56px);
