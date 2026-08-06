@@ -6,6 +6,7 @@
   import ProjectMembershipServices from "../services/ProjectMembershipServices.js";
   import StoryAssigneeServices from "../services/StoryAssigneeServices.js";
   import GithubSection from "../components/GithubSection.vue";
+  import RepoServices from "../services/RepoServices.js";
 
   // Column ids to match the seeded columns in the backend.
   const columnDefinitions = [
@@ -48,7 +49,9 @@
   const assigneeOptions = ref([]);
   // Ids for the users selected in assignee dropdown.
   const formAssignee = ref([]);
-  // Branches associated with current project retrieved from Github API
+  // Repos associated with current project
+  const repos = ref([]);
+  // Branches associated with repos retrieved from Github API
   const branches = ref([]);
   // Ids of the story's current assignee rows when editing.
   const editingAssigneeIds = ref([]);
@@ -66,6 +69,15 @@
       .then((response) => {
         // Saves the first project id.
         projectId.value = response.data[0].id;
+      })
+      .catch((error) => {
+        console.log(error);
+      });
+
+    // Get repos associated with the current project from the database
+    await RepoServices.getReposByProjectId(projectId)
+      .then((response) => {
+        repos.value = response.data;
       })
       .catch((error) => {
         console.log(error);
@@ -175,6 +187,7 @@
     formStoryPoint.value = null;
     formAssignee.value = [];
     editingAssigneeIds.value = [];
+
     showDialog.value = true;
   }
 
@@ -182,6 +195,7 @@
   function openEditDialog(story) {
     isEditing.value = true;
     editingStoryId.value = story.id;
+    console.log("Open edit dialog ID:" + editingStoryId.value);
     selectedColumnId.value = story.columnId;
     formTitle.value = story.title;
     formDescription.value = story.description;
@@ -466,7 +480,7 @@
             <!-- Github information -->
             <v-col cols="12">
               <div class="form-label">GITHUB BRANCH</div>
-              <GithubSection />
+              <GithubSection :storyId="editingStoryId" :repos="repos" />
             </v-col>
           </v-row>
 
@@ -556,5 +570,13 @@
   }
   .story-dialog-card {
     transform: translateY(-56px);
+  }
+
+  .form-label {
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.07em;
+    color: #8b1a35;
+    margin-bottom: 4px;
   }
 </style>
