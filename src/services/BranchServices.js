@@ -5,15 +5,22 @@ export default {
     return apiClient.get("branches/story/" + userStoryId);
   },
 
-  getBranchesFromGithubAPI() {
-    return apiClient.get("/api/githubClient/branches");
+  getBranchesFromGithubAPI(repo) {
+    return apiClient.post("/api/github/branches", {
+      repoUrl: repo.repoUrl,
+      token: repo.token,
+    });
+  },
+
+  updateBranch(branch) {
+    return apiClient.put("branches/" + branch.id, branch);
   },
 
   addBranch(branch) {
-    return apiClient.post("branches/", history);
+    return apiClient.post("branches/", branch);
   },
 
-  deleteAllBranches() {
-    return apiClient.delete("branches/");
+  deleteBranches(branch) {
+    return apiClient.delete("branches/" + branch.id);
   },
 };

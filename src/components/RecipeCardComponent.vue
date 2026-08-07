@@ -1,54 +1,56 @@
 <script setup>
-import { onMounted, ref } from "vue";
-import { useRouter } from "vue-router";
-import RecipeIngredientServices from "../services/RecipeIngredientServices.js";
-import RecipeStepServices from "../services/RecipeStepServices";
-import RecipeReports from "../reports/RecipeReports.js";
+  import { onMounted, ref } from "vue";
+  import { useRouter } from "vue-router";
+  import RecipeIngredientServices from "../services/RecipeIngredientServices.js";
+  import RecipeStepServices from "../services/RecipeStepServices";
+  import RecipeReports from "../reports/RecipeReports.js";
 
-const router = useRouter();
+  const router = useRouter();
 
-const showDetails = ref(false);
-const recipeIngredients = ref([]);
-const recipeSteps = ref([]);
-const user = ref(null);
+  const showDetails = ref(false);
+  const recipeIngredients = ref([]);
+  const recipeSteps = ref([]);
+  const user = ref(null);
 
-const props = defineProps({
-  recipe: {
-    required: true,
-  },
-});
+  const props = defineProps({
+    recipe: {
+      required: true,
+    },
+  });
 
-onMounted(async () => {
-  await getRecipeIngredients();
-  await getRecipeSteps();
-  user.value = JSON.parse(localStorage.getItem("user"));
-});
+  onMounted(async () => {
+    await getRecipeIngredients();
+    await getRecipeSteps();
+    user.value = JSON.parse(localStorage.getItem("user"));
+  });
 
-async function getRecipeIngredients() {
-  await RecipeIngredientServices.getRecipeIngredientsForRecipe(props.recipe.id)
-    .then((response) => {
-      recipeIngredients.value = response.data;
-    })
-    .catch((error) => {
-      console.log(error);
-    });
-}
+  async function getRecipeIngredients() {
+    await RecipeIngredientServices.getRecipeIngredientsForRecipe(
+      props.recipe.id,
+    )
+      .then((response) => {
+        recipeIngredients.value = response.data;
+      })
+      .catch((error) => {
+        console.log(error);
+      });
+  }
 
-async function getRecipeSteps() {
-  await RecipeStepServices.getRecipeStepsForRecipeWithIngredients(
-    props.recipe.id
-  )
-    .then((response) => {
-      recipeSteps.value = response.data;
-    })
-    .catch((error) => {
-      console.log(error);
-    });
-}
+  async function getRecipeSteps() {
+    await RecipeStepServices.getRecipeStepsForRecipeWithIngredients(
+      props.recipe.id,
+    )
+      .then((response) => {
+        recipeSteps.value = response.data;
+      })
+      .catch((error) => {
+        console.log(error);
+      });
+  }
 
-function navigateToEdit() {
-  router.push({ name: "editRecipe", params: { id: props.recipe.id } });
-}
+  function navigateToEdit() {
+    router.push({ name: "editRecipe", params: { id: props.recipe.id } });
+  }
 </script>
 
 <template>

@@ -7,6 +7,7 @@
   import StoryAssigneeServices from "../services/StoryAssigneeServices.js";
   import GithubSection from "../components/GithubSection.vue";
   import RepoServices from "../services/RepoServices.js";
+  import BranchServices from "../services/BranchServices.js";
 
   // Column ids to match the seeded columns in the backend.
   const columnDefinitions = [
@@ -40,6 +41,8 @@
   const showDialog = ref(false);
   const isEditing = ref(false);
   const editingStoryId = ref(null);
+  const editingBranch = ref(null);
+  const newBranch = ref(null);
   const selectedColumnId = ref(null);
   const formTitle = ref("");
   const formDescription = ref("");
@@ -75,9 +78,10 @@
       });
 
     // Get repos associated with the current project from the database
-    await RepoServices.getReposByProjectId(projectId)
+    await RepoServices.getReposByProjectId(projectId.value)
       .then((response) => {
         repos.value = response.data;
+        console.log("PARENT REPOS VALUE:" + repos.value.length);
       })
       .catch((error) => {
         console.log(error);
@@ -188,6 +192,8 @@
     formAssignee.value = [];
     editingAssigneeIds.value = [];
 
+    editingBranch.value = null;
+
     showDialog.value = true;
   }
 
@@ -262,7 +268,11 @@
 
     draggedStory.value = null;
   }
-  async function saveStory() {
+
+  async function saveStory(editingBranch) {
+    // editingBranch has the new branch name and original branch details
+    console.log("Save story clicked");
+    // selected branch from child component's dropdown
     // Title can't be empty.
     if (formTitle.value === "") {
       return;
@@ -293,6 +303,43 @@
       storyId = response.data.id;
     }
 
+    var branch = null;
+    editingStoryId.value = storyId;
+    // better fix may be to just allow these fields to be nullable in the model
+    if (!editingBranch) {
+      // user left dropdown blank
+    } else if (isEditing.value && editingBranch.dbBranch?.id) // for Edit dialog
+    {
+      branch = {
+        id: editingBranch.dbBranch.id,
+        title: editingBranch.name,
+        storyId: editingBranch.dbBranch.storyId,
+        repoId: editingBranch.dbBranch.repoId,
+        columnId: editingBranch.dbBranch.columnId,
+      };
+      await BranchServices.updateBranch(branch);
+      console.log("Branch updated");
+    } else {
+      // for Create dialog
+      branch = {
+        title: editingBranch.name,
+        userStoryId: storyId,
+        repoId: editingBranch.repoId,
+        columnId: selectedColumnId.value,
+      };
+      console.log("Sending branch:", branch);
+      try {
+        await BranchServices.addBranch(branch);
+      } catch (error) {
+        if (error.response) {
+          console.error("Error response:", error.response.data);
+        } else {
+          console.error("Error:", error.message);
+        }
+      }
+      console.log("Branch created");
+    }
+
     // Adds the currently selected assignees.
     for (let i = 0; i < formAssignee.value.length; i++) {
       await StoryAssigneeServices.addAssignee({
@@ -310,12 +357,19 @@
     try {
       // Send story id to backend to delete it.
       await StoryboardServices.deleteStory(editingStoryId.value);
+      await BranchServices.delete;
       // Refresh the stories.
       await getStories();
       showDialog.value = false;
     } catch (error) {
       console.log(error);
     }
+  }
+
+  // don't want saveStory to trigger every time the user changes the branch dropdown value (closes dialog popup too early)
+  function onBranchUpdate(newBranch) {
+    // from newBranch
+    editingBranch.value = newBranch;
   }
 </script>
 
@@ -480,7 +534,13 @@
             <!-- Github information -->
             <v-col cols="12">
               <div class="form-label">GITHUB BRANCH</div>
-              <GithubSection :storyId="editingStoryId" :repos="repos" />
+              <GithubSection
+                :storyId="editingStoryId"
+                :repos="repos"
+                @updateBranch="onBranchUpdate"
+              />
+              <!-- when child changes value, run saveStory() -->
+              <!-- @updateBranch holds value, stores it in newBranch ref, newBranch goes into onBranchUpdate -->
             </v-col>
           </v-row>
 
@@ -514,7 +574,9 @@
           <!-- Spacing for save button. -->
           <v-spacer></v-spacer>
 
-          <v-btn color="green" variant="text" @click="saveStory"> Save </v-btn>
+          <v-btn color="green" variant="text" @click="saveStory(editingBranch)">
+            Save
+          </v-btn>
         </v-card-actions>
       </v-card>
     </v-dialog>
