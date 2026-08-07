@@ -12,6 +12,14 @@ export default {
     });
   },
 
+  getPRsFromGithubAPI(repo, branch) {
+    return apiClient.post("/api/github/pulls", {
+      repoUrl: repo.repoUrl,
+      token: repo.token,
+      branchName: branch.name,
+    });
+  },
+
   updateBranch(branch) {
     return apiClient.put("branches/" + branch.id, branch);
   },

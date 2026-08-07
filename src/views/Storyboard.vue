@@ -493,7 +493,7 @@
     </div>
 
     <!-- Popup dialog. -->
-    <v-dialog v-model="showDialog" width="500">
+    <v-dialog v-model="showDialog" width="900">
       <v-card class="story-dialog-card">
         <v-card-title>
           {{ isEditing ? "Edit User Story" : "New User Story" }}
