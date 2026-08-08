@@ -6,7 +6,6 @@ import ProjectMembershipServices from "../services/ProjectMembershipServices.js"
 import UserServices from "../services/UserServices.js";
 import RepoServices from "../services/RepoServices.js";
 import SprintServices from "../services/SprintServices.js";
-import TeamServices from "../services/TeamServices.js";
 
 const route = useRoute();
 const router = useRouter();
@@ -68,116 +67,6 @@ function removeEditMember(i) {
   editingMembers.value.splice(i, 1);
 }
 
-// --- Team state ---
-const teams = ref([]);
-const expandedTeamId = ref(null);
-const teamDialog = ref(false);
-const teamDialogMode = ref("create");
-const memberSearch = ref("");
-const teamForm = ref({ id: null, name: "", description: "", members: [] });
-
-const filteredProjectMembers = computed(() => {
-  if (!memberSearch.value) return [];
-  const q = memberSearch.value.toLowerCase();
-  return members.value.filter(
-    (m) =>
-      !teamForm.value.members.includes(m.userId) &&
-      (m.user.firstName.toLowerCase().includes(q) ||
-        m.user.lastName.toLowerCase().includes(q) ||
-        m.user.email.toLowerCase().includes(q))
-  );
-});
-
-const selectedTeamMemberDetails = computed(() =>
-  teamForm.value.members
-    .map((uid) => members.value.find((m) => m.userId === uid))
-    .filter(Boolean)
-);
-
-function addTeamMember(m) {
-  teamForm.value.members.push(m.userId);
-  memberSearch.value = "";
-}
-
-function removeTeamMember(userId) {
-  const idx = teamForm.value.members.indexOf(userId);
-  if (idx !== -1) teamForm.value.members.splice(idx, 1);
-}
-
-function getInitialsFromUser(u) {
-  return (u.firstName[0] + u.lastName[0]).toUpperCase();
-}
-
-async function loadTeams() {
-  const res = await TeamServices.getTeamsByProjectId(projectId);
-  teams.value = Array.isArray(res.data) ? res.data : [];
-}
-
-function toggleExpandTeam(teamId) {
-  expandedTeamId.value = expandedTeamId.value === teamId ? null : teamId;
-}
-
-function openNewTeamDialog() {
-  teamDialogMode.value = "create";
-  teamForm.value = { id: null, name: "", description: "", members: [] };
-  memberSearch.value = "";
-  teamDialog.value = true;
-}
-
-function openEditTeamDialog(team) {
-  teamDialogMode.value = "edit";
-  teamForm.value = {
-    id: team.id,
-    name: team.name,
-    description: team.description || "",
-    members: team.member.map((m) => m.userId),
-  };
-  memberSearch.value = "";
-  teamDialog.value = true;
-}
-
-async function saveTeam() {
-  if (!teamForm.value.name) return;
-  try {
-    if (teamDialogMode.value === "create") {
-      await TeamServices.createTeam({
-        name: teamForm.value.name,
-        description: teamForm.value.description || null,
-        projectId,
-        members: teamForm.value.members,
-      });
-    } else {
-      await TeamServices.updateTeam(teamForm.value.id, {
-        name: teamForm.value.name,
-        description: teamForm.value.description || null,
-      });
-      const existing = teams.value.find((t) => t.id === teamForm.value.id);
-      const existingIds = existing?.member?.map((m) => m.userId) || [];
-      const toAdd = teamForm.value.members.filter((id) => !existingIds.includes(id));
-      const toRemove = existing?.member?.filter((m) => !teamForm.value.members.includes(m.userId)) || [];
-      await Promise.all(toAdd.map((uid) => TeamServices.addMember({ teamId: teamForm.value.id, userId: uid })));
-      await Promise.all(toRemove.map((m) => TeamServices.removeMember(m.id)));
-    }
-    teamDialog.value = false;
-    await loadTeams();
-  } catch (err) {
-    console.error(err);
-  }
-}
-
-async function deleteTeam(teamId) {
-  if (!window.confirm("Are you sure you want to delete this team?")) return;
-  try {
-    await TeamServices.deleteTeam(teamId);
-    if (expandedTeamId.value === teamId) {
-      expandedTeamId.value = null;
-    }
-    await loadTeams();
-  } catch (err) {
-    console.error(err);
-  }
-}
-// --- End team ---
 
 const projectInitials = computed(() => {
   if (!project.value?.name) return "P";
@@ -256,7 +145,6 @@ async function saveProject() {
     editDialog.value = false;
     await loadProject();
     await loadMembers();
-    await loadTeams();
   } catch (error) {
     console.error(error);
   }
@@ -477,7 +365,7 @@ onMounted(async () => {
     router.push({ name: "projects" });
     return;
   }
-  await Promise.all([loadProject(), loadMembers(), loadRepos(), loadSprints(), loadTeams()]);
+  await Promise.all([loadProject(), loadMembers(), loadRepos(), loadSprints()]);
 });
 </script>
 
@@ -527,7 +415,6 @@ onMounted(async () => {
       <v-tabs v-model="tab" color="primary" class="mt-4">
         <v-tab value="Summary">Summary</v-tab>
         <v-tab value="Sprints">Sprints</v-tab>
-        <v-tab value="Team">Teams</v-tab>
         <v-tab value="User Stories">User Stories</v-tab>
         <v-tab value="Acceptance Criteria">Acceptance Criteria</v-tab>
         <v-tab value="Repositories">Repositories</v-tab>
@@ -541,11 +428,11 @@ onMounted(async () => {
           <v-col cols="12" md="4">
             <v-card class="rounded-lg elevation-5 pa-4">
               <div class="subheader">
-                TEAMS
+                SPRINTS
               </div>
-              <div class="text-h4 font-weight-bold">{{ teams.length }}</div>
+              <div class="text-h4 font-weight-bold">{{ sprints.length }}</div>
               <div class="text-body-2 text-grey-darken-1">
-                working on this project
+                on this project
               </div>
             </v-card>
           </v-col>
@@ -556,7 +443,7 @@ onMounted(async () => {
               </div>
               <div class="text-h4 font-weight-bold">{{ members.length }}</div>
               <div class="text-body-2 text-grey-darken-1">
-                across all teams
+                assigned to this project
               </div>
             </v-card>
           </v-col>
@@ -684,55 +571,6 @@ onMounted(async () => {
         </v-alert>
       </v-window-item>
 
-      <v-window-item value="Team">
-        <div class="d-flex justify-space-between align-center mb-4">
-          <div>
-            <div class="text-h6 font-weight-bold">Teams on this project</div>
-          </div>
-          <v-btn color="primary" prepend-icon="mdi-plus" @click="openNewTeamDialog">New Team</v-btn>
-        </div>
-
-        <v-alert v-if="teams.length === 0" type="info" variant="tonal">No teams yet.</v-alert>
-
-        <v-card v-for="team in teams" :key="team.id" class="rounded-lg elevation-2 mb-3" @click="toggleExpandTeam(team.id)" style="cursor: pointer">
-          <div class="d-flex align-center pa-4">
-            <v-avatar color="secondary" size="40" class="mr-4">
-              <v-icon>mdi-account-group</v-icon>
-            </v-avatar>
-            <div class="flex-grow-1">
-              <div class="font-weight-bold">{{ team.name }}</div>
-              <div class="text-caption text-grey-darken-1">{{ team.description || "No description" }}</div>
-            </div>
-          </div>
-
-          <v-expand-transition>
-            <div v-show="expandedTeamId === team.id">
-              <v-divider />
-              <div v-if="(team.member || []).length === 0" class="px-4 py-3 text-body-2 text-grey-darken-1">
-                No members in this team.
-              </div>
-              <div
-                v-for="m in (team.member || [])"
-                :key="m.id"
-                class="d-flex align-center px-4 py-3"
-              >
-                <v-avatar color="primary" size="36" class="font-weight-bold mr-3">
-                  {{ getInitialsFromUser(m.user) }}
-                </v-avatar>
-                <div class="flex-grow-1">
-                  <div class="font-weight-bold">{{ m.user.firstName }} {{ m.user.lastName }}</div>
-                  <div class="text-caption text-grey-darken-1">{{ m.user.email }}</div>
-                </div>
-                <v-chip size="small" variant="tonal">Team Member</v-chip>
-              </div>
-              <div class="d-flex ga-2 px-4 pb-4">
-                <button @click.stop="openEditTeamDialog(team)" class="editButtonStyle">Edit</button>
-                <button @click.stop="deleteTeam(team.id)" class="deleteButtonStyle">Delete</button>
-              </div>
-            </div>
-          </v-expand-transition>
-        </v-card>
-      </v-window-item>
 
       <v-window-item value="User Stories">
       </v-window-item>
@@ -1041,97 +879,6 @@ onMounted(async () => {
     </v-card>
   </v-dialog>
 
-  <v-dialog v-model="teamDialog" max-width="520">
-    <v-card class="rounded-xl pa-2">
-      <v-card-title class="d-flex justify-space-between align-center px-4 pt-4 pb-2">
-        <span class="text-h6 font-weight-bold">{{ teamDialogMode === "create" ? "New Team" : "Edit Team" }}</span>
-        <v-btn icon variant="text" @click="teamDialog = false"><v-icon>mdi-close</v-icon></v-btn>
-      </v-card-title>
-      <v-card-text class="px-4">
-        <div class="subheader mb-1">TEAM NAME</div>
-        <v-text-field
-          v-model="teamForm.name"
-          placeholder="e.g. Frontend Group"
-          variant="outlined"
-          density="comfortable"
-          rounded="lg"
-          bg-color="grey-lighten-4"
-          class="mb-1"
-          hide-details
-        />
-        <div class="subheader mt-3 mb-1">DESCRIPTION</div>
-        <v-text-field
-          v-model="teamForm.description"
-          placeholder="What does this team focus on?"
-          variant="outlined"
-          density="comfortable"
-          rounded="lg"
-          bg-color="grey-lighten-4"
-          class="mb-1"
-          hide-details
-        />
-        <div class="subheader mt-3 mb-1">MEMBERS</div>
-
-        <div
-          v-for="m in selectedTeamMemberDetails"
-          :key="m.userId"
-          class="d-flex align-center mb-2 pa-2 rounded-lg"
-          style="background: #f5f5f5"
-        >
-          <div class="member-avatar mr-3">{{ getInitialsFromUser(m.user) }}</div>
-          <span class="flex-grow-1 text-body-2">{{ m.user.firstName }} {{ m.user.lastName }}</span>
-          <v-btn icon variant="text" size="small" @click="removeTeamMember(m.userId)">
-            <v-icon size="18">mdi-close</v-icon>
-          </v-btn>
-        </div>
-
-        <v-alert
-          v-if="members.length === 0"
-          type="info"
-          variant="tonal"
-          density="compact"
-          class="mb-2"
-        >
-          No members assigned to this project yet. Add members to the project first.
-        </v-alert>
-
-        <v-text-field
-          v-else
-          v-model="memberSearch"
-          placeholder="Search by name or email..."
-          variant="outlined"
-          density="comfortable"
-          rounded="lg"
-          bg-color="grey-lighten-4"
-          class="mb-1"
-          hide-details
-        />
-
-        <v-card v-if="filteredProjectMembers.length" class="mt-1 rounded-lg" elevation="3">
-          <v-list density="compact">
-            <v-list-item
-              v-for="m in filteredProjectMembers"
-              :key="m.id"
-              @click="addTeamMember(m)"
-              style="cursor: pointer"
-            >
-              <template #prepend>
-                <div class="member-avatar mr-3">{{ getInitialsFromUser(m.user) }}</div>
-              </template>
-              <v-list-item-title>{{ m.user.firstName }} {{ m.user.lastName }}</v-list-item-title>
-              <v-list-item-subtitle>{{ m.user.email }}</v-list-item-subtitle>
-            </v-list-item>
-          </v-list>
-        </v-card>
-      </v-card-text>
-      <v-card-actions class="px-4 pb-4 justify-end">
-        <v-btn variant="text" @click="teamDialog = false">Cancel</v-btn>
-        <v-btn color="primary" variant="flat" class="rounded-lg px-6" @click="saveTeam">
-          {{ teamDialogMode === "create" ? "Create Team" : "Save Changes" }}
-        </v-btn>
-      </v-card-actions>
-    </v-card>
-  </v-dialog>
 
   </v-container>
 </template>

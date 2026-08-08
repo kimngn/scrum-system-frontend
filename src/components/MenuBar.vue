@@ -32,7 +32,7 @@
 <template>
   <div>
     <v-app-bar color="primary" app dark>
-      <router-link :to="{ name: 'projects' }">
+      <router-link :to="{ name: user !== null && user.role === 'admin' ? 'admin' : 'projects' }">
         <v-img
           class="mx-2"
           :src="logoURL"
@@ -56,7 +56,7 @@
         Login
       </v-btn>
       <v-btn
-        v-if="user !== null && user.role === 'member'"
+        v-if="user !== null && (user.role === 'member' || user.role === 'lead' || user.role === 'admin')"
         class="mx-2"
         :to="{ name: 'storyboard' }"
       >
