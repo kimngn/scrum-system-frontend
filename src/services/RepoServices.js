@@ -4,6 +4,10 @@ export default {
   getReposByProjectId(projectId) {
     return apiClient.get("repos/project/" + projectId);
   },
+
+  getRepo(id) {
+    return apiClient.get("repos/" + id);
+  },
   addRepo(repo) {
     return apiClient.post("repos", repo);
   },
