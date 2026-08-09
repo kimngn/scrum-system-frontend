@@ -4,17 +4,12 @@ export default {
   getReposByProjectId(projectId) {
     return apiClient.get("repos/project/" + projectId);
   },
-
-  getRepo(id) {
-    return apiClient.get("repos/" + id);
-  },
   addRepo(repo) {
     return apiClient.post("repos", repo);
   },
   updateRepo(repoId, repo) {
     return apiClient.put("repos/" + repoId, repo);
   },
-
   deleteRepo(repoId) {
     return apiClient.delete("repos/" + repoId);
   },

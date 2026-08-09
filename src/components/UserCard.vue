@@ -16,7 +16,7 @@
   const roles = ref(["admin", "lead", "member"]);
 
   // Call back to parent
-  const emit = defineEmits([""]);
+  const emit = defineEmits(["refresh"]);
 
   // Variables
   const router = useRouter();
