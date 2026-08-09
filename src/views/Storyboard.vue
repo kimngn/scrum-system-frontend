@@ -1,11 +1,12 @@
 <script setup>
-import { onMounted, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import StoryboardServices from "../services/StoryboardServices.js";
 import ProjectServices from "../services/ProjectServices.js";
 import ProjectMembershipServices from "../services/ProjectMembershipServices.js";
 import StoryAssigneeServices from "../services/StoryAssigneeServices.js";
 import ProjectColumnServices from "../services/ProjectColumnServices.js";
+import SprintServices from "../services/SprintServices.js";
 
 // Columns shown when the user isn't assigned to a project so the storyboard has the error snackbar.
 const fallbackColumns = [
@@ -18,23 +19,19 @@ const fallbackColumns = [
 ];
 
 const priorityOptions = ["Critical", "High", "Medium", "Low"];
-
 const router = useRouter();
 const user = ref(null);
-// Id of the logged in user's project, fetched from the backend.
+const userProjects = ref([]);
 const projectId = ref(null);
-// Stores stories from the backend.
+const sprints = ref([]);
+const selectedSprintId = ref(null);
+const formSprintId = ref(null);
 const stories = ref([]);
-// Stores columns used by template.
 const columns = ref([]);
-// Stores the dragged story.
 const draggedStory = ref(null);
-// Stores the columnId being dragged over.
 const hoverColumnId = ref(null);
 const storyPoints = [1, 2, 3, 5, 8, 13, 21, 34, 55, 89,];
-// Shows snackbar error when there is no projectId.
 const showProjectError = ref(false);
-// Form popup state.
 const showDialog = ref(false);
 const isEditing = ref(false);
 const editingStoryId = ref(null);
@@ -43,11 +40,8 @@ const formTitle = ref("");
 const formDescription = ref("");
 const formPriority = ref("Medium");
 const formStoryPoint = ref(null);
-// Users assigned to the project, shown in the assignee dropdown.
 const assigneeOptions = ref([]);
-// Ids for the users selected in assignee dropdown.
 const formAssignee = ref([]);
-// Ids of the story's current assignee rows when editing.
 const editingAssigneeIds = ref([]);
 const projectColumns = ref([]);
 const canManageColumns = ref(false);
@@ -55,6 +49,24 @@ const showColumnDialog = ref(false);
 const newColumnTitle = ref("");
 const draggedColumn = ref(null);
 const hoverColumnRowId = ref(null);
+
+// Sprint dropdown used to filter the board. Null shows every sprint.
+const sprintFilterOptions = computed(() => {
+  const options = [{ title: "All Sprints", value: null }];
+  for (let i = 0; i < sprints.value.length; i++) {
+    options.push({ title: sprints.value[i].name, value: sprints.value[i].id });
+  }
+  return options;
+});
+
+// Sprint dropdown used in the story form. Null means backlog.
+const storySprintOptions = computed(() => {
+  const options = [{ title: "Backlog", value: null }];
+  for (let i = 0; i < sprints.value.length; i++) {
+    options.push({ title: sprints.value[i].name, value: sprints.value[i].id });
+  }
+  return options;
+});
 
 onMounted(async () => {
   // Gets the logged in user from local storage.
@@ -65,23 +77,88 @@ onMounted(async () => {
   }
   canManageColumns.value = user.value.role === "lead" || user.value.role === "admin";
 
-  // Gets the user's project from the backend.
+  // Gets every project the user belongs to.
   await ProjectServices.getProjectsByUserId(user.value.id)
     .then((response) => {
-      // Saves the first project id.
-      projectId.value = response.data[0].id;
+      userProjects.value = response.data;
+
+      // Restores the last selected project, if it still belongs to the user.
+      const savedProjectId = Number(localStorage.getItem("storyboardProjectId"));
+      let savedProjectStillExists = false;
+      for (let i = 0; i < userProjects.value.length; i++) {
+        if (userProjects.value[i].id === savedProjectId) {
+          savedProjectStillExists = true;
+        }
+      }
+
+      if (savedProjectStillExists) {
+        projectId.value = savedProjectId;
+      } else if (userProjects.value.length > 0) {
+        // Falls back to the first project.
+        projectId.value = userProjects.value[0].id;
+      }
     })
     .catch((error) => {
       console.log(error);
     });
 
+  // Restores the last selected sprint filter.
+  const savedSprintId = localStorage.getItem("storyboardSprintId");
+  selectedSprintId.value = savedSprintId ? Number(savedSprintId) : null;
+
+  await loadProjectData();
+});
+
+// Loads everything to the selected project.
+async function loadProjectData() {
   // Gets the project's columns from the backend.
   await getColumns();
   // Gets the user assignees from the backend
   await getAssignees();
+  // Gets the project's sprints from the backend.
+  await getSprints();
   // Gets the stories from the backend.
   await getStories();
-});
+}
+
+// Runs when the user picks a changes the project.
+async function changeProject() {
+  // Remembers the selected project so refreshing doesn't reset it.
+  localStorage.setItem("storyboardProjectId", projectId.value);
+
+  selectedSprintId.value = null;
+  localStorage.removeItem("storyboardSprintId");
+
+  await loadProjectData();
+}
+
+// Get sprints for the sprint filter dropdown.
+async function getSprints() {
+  if (!projectId.value) {
+    sprints.value = [];
+    return;
+  }
+
+  await SprintServices.getSprintsByProjectId(projectId.value)
+    .then((response) => {
+      sprints.value = response.data;
+    })
+    .catch((error) => {
+      console.log(error);
+    });
+}
+
+// Runs when the user picks a different sprint from the dropdown.
+function changeSprint() {
+  // Remembers the selected sprint so a page refresh doesn't reset it.
+  if (selectedSprintId.value === null) {
+    localStorage.removeItem("storyboardSprintId");
+  } else {
+    localStorage.setItem("storyboardSprintId", selectedSprintId.value);
+  }
+
+  buildColumns();
+}
 
 // Gets the columns for the project.
 async function getColumns() {
@@ -160,6 +237,11 @@ function buildColumns() {
   for (let i = 0; i < stories.value.length; i++) {
     const story = stories.value[i];
 
+    // Skips non sprint associated stories.
+    if (selectedSprintId.value !== null && story.sprintId !== selectedSprintId.value) {
+      continue;
+    }
+
     // Checks each column to find where the story belongs.
     for (let j = 0; j < columnList.length; j++) {
       // If story's column title matches this column title add story to that column.
@@ -198,6 +280,7 @@ function openCreateDialog(columnId) {
   formStoryPoint.value = null;
   formAssignee.value = [];
   editingAssigneeIds.value = [];
+  formSprintId.value = selectedSprintId.value;
   showDialog.value = true;
 }
 
@@ -210,6 +293,7 @@ function openEditDialog(story) {
   formDescription.value = story.description;
   formPriority.value = story.priority;
   formStoryPoint.value = story.storyPoint;
+  formSprintId.value = story.sprintId ?? null;
 
   const userIds = [];
   const assigneeIds = [];
@@ -287,6 +371,7 @@ async function saveStory() {
     storyPoint: formStoryPoint.value,
     projectId: projectId.value,
     columnId: selectedColumnId.value,
+    sprintId: formSprintId.value,
   };
   // Get storyId.
   let storyId = editingStoryId.value;
@@ -411,17 +496,53 @@ async function dropColumn(targetColumn) {
   <!-- fluid makes it use the full width. -->
   <v-container fluid>
 
-    <div class="d-flex align-center">
+    <v-btn
+      variant="text"
+      prepend-icon="mdi-arrow-left"
+      @click="router.go(-1)"
+      class="mb-4"
+    >
+      Back
+    </v-btn>
+
+    <div class="d-flex flex-wrap align-center ga-3">
       <v-card-title class="pl-0 text-h4 font-weight-bold">
         Storyboard
       </v-card-title>
+
+      <!-- Project selector -->
+      <v-select
+        v-model="projectId"
+        :items="userProjects"
+        item-title="name"
+        item-value="id"
+        label="Project"
+        density="compact"
+        variant="outlined"
+        hide-details
+        style="width: 220px"
+        @update:model-value="changeProject"
+      ></v-select>
+
+      <!-- Sprint selector -->
+      <v-select
+        v-model="selectedSprintId"
+        :items="sprintFilterOptions"
+        item-title="title"
+        item-value="value"
+        label="Sprint"
+        density="compact"
+        variant="outlined"
+        hide-details
+        style="width: 220px"
+        @update:model-value="changeSprint"
+      ></v-select>
 
       <!-- Only leads and admins can manage columns. -->
       <v-btn
         v-if="canManageColumns"
         color="primary"
         variant="outlined"
-        class="ml-4"
         @click="showColumnDialog = true"
       >
         Manage Columns
@@ -572,6 +693,15 @@ async function dropColumn(targetColumn) {
               ></v-select>
             </v-col>
           </v-row>
+
+          <!-- Sprint dropdown -->
+          <v-select
+            v-model="formSprintId"
+            :items="storySprintOptions"
+            item-title="title"
+            item-value="value"
+            label="Sprint"
+          ></v-select>
 
           <!-- Shows assignees email under name -->
           <v-select
