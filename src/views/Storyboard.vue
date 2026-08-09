@@ -1,89 +1,81 @@
 <script setup>
+  import { onMounted, ref } from "vue";
+  import { useRouter } from "vue-router";
+  import StoryboardServices from "../services/StoryboardServices.js";
+  import ProjectServices from "../services/ProjectServices.js";
+  import ProjectMembershipServices from "../services/ProjectMembershipServices.js";
+  import StoryAssigneeServices from "../services/StoryAssigneeServices.js";
+  import GithubSection from "../components/GithubSection.vue";
+  import RepoServices from "../services/RepoServices.js";
+  import BranchServices from "../services/BranchServices.js";
 
-import { onMounted, ref } from "vue";
-import { useRouter } from "vue-router";
-import StoryboardServices from "../services/StoryboardServices.js";
-import ProjectServices from "../services/ProjectServices.js";
-import ProjectMembershipServices from "../services/ProjectMembershipServices.js";
-import StoryAssigneeServices from "../services/StoryAssigneeServices.js";
-import ProjectColumnServices from "../services/ProjectColumnServices.js";
-import GithubSection from "../components/GithubSection.vue";
-import RepoServices from "../services/RepoServices.js";
-import BranchServices from "../services/BranchServices.js";
-    
-// Columns shown when the user isn't assigned to a project so the storyboard has the error snackbar.
-const fallbackColumns = [
-  { id: 1, title: "Backlog" },
-  { id: 2, title: "To Do" },
-  { id: 3, title: "In Progress" },
-  { id: 4, title: "Ready for Test" },
-  { id: 5, title: "Testing" },
-  { id: 6, title: "Done" },
-];
+  // Column ids to match the seeded columns in the backend.
+  const columnDefinitions = [
+    { id: 1, title: "Backlog" },
+    { id: 2, title: "To Do" },
+    { id: 3, title: "In Progress" },
+    { id: 4, title: "Ready for Test" },
+    { id: 5, title: "Testing" },
+    { id: 6, title: "Done" },
+  ];
 
-const priorityOptions = ["Critical", "High", "Medium", "Low"];
+  const priorityOptions = ["Critical", "High", "Medium", "Low"];
 
-const router = useRouter();
-const user = ref(null);
-// Id of the logged in user's project, fetched from the backend.
-const projectId = ref(null);
-// Stores stories from the backend.
-const stories = ref([]);
-// Stores columns used by template.
-const columns = ref([]);
-// Repos associated with current project
-const repos = ref([]);
-// Branches associated with repos retrieved from Github API
-const branches = ref([]);
-// Stores the dragged story.
-const draggedStory = ref(null);
-// Stores the columnId being dragged over.
-const hoverColumnId = ref(null);
-const storyPoints = [1, 2, 3, 5, 8, 13, 21, 34, 55, 89,];
-// Shows snackbar error when there is no projectId.
-const showProjectError = ref(false);
-// Form popup state.
-const showDialog = ref(false);
-const isEditing = ref(false);
-const editingStoryId = ref(null);
-const selectedColumnId = ref(null);
-const editingBranch = ref(null);
-const newBranch = ref(null);
-const formTitle = ref("");
-const formDescription = ref("");
-const formPriority = ref("Medium");
-const formStoryPoint = ref(null);
-// Users assigned to the project, shown in the assignee dropdown.
-const assigneeOptions = ref([]);
-// Ids for the users selected in assignee dropdown.
-const formAssignee = ref([]);
-// Ids of the story's current assignee rows when editing.
-const editingAssigneeIds = ref([]);
-const projectColumns = ref([]);
-const canManageColumns = ref(false);
-const showColumnDialog = ref(false);
-const newColumnTitle = ref("");
-const draggedColumn = ref(null);
-const hoverColumnRowId = ref(null);
+  const router = useRouter();
+  const user = ref(null);
+  // Id of the logged in user's project, fetched from the backend.
+  const projectId = ref(null);
+  // Stores stories from the backend.
+  const stories = ref([]);
+  // Stores columns used by template.
+  const columns = ref([]);
+  // Stores the dragged story.
+  const draggedStory = ref(null);
+  // Stores the columnId being dragged over.
+  const hoverColumnId = ref(null);
+  const storyPoints = [1, 2, 3, 5, 8, 13, 21, 34, 55, 89];
 
-onMounted(async () => {
-  // Gets the logged in user from local storage.
-  user.value = JSON.parse(localStorage.getItem("user"));
-  if (!user.value) {
-    router.push({ name: "login" });
-    return;
-  }
-  canManageColumns.value = user.value.role === "lead" || user.value.role === "admin";
+  // Shows snackbar error when there is no projectId.
+  const showProjectError = ref(false);
+  // Form popup state.
+  const showDialog = ref(false);
+  const isEditing = ref(false);
+  const editingStoryId = ref(null);
+  const editingBranch = ref(null);
+  const newBranch = ref(null);
+  const selectedColumnId = ref(null);
+  const formTitle = ref("");
+  const formDescription = ref("");
+  const formPriority = ref("Medium");
+  const formStoryPoint = ref(null);
+  // Users assigned to the project, shown in the assignee dropdown.
+  const assigneeOptions = ref([]);
+  // Ids for the users selected in assignee dropdown.
+  const formAssignee = ref([]);
+  // Repos associated with current project
+  const repos = ref([]);
+  // Branches associated with repos retrieved from Github API
+  const branches = ref([]);
+  // Ids of the story's current assignee rows when editing.
+  const editingAssigneeIds = ref([]);
 
-  // Gets the user's project from the backend.
-  await ProjectServices.getProjectsByUserId(user.value.id)
-    .then((response) => {
-      // Saves the first project id.
-      projectId.value = response.data[0].id;
-    })
-    .catch((error) => {
-      console.log(error);
-    });
+  onMounted(async () => {
+    // Gets the logged in user from local storage.
+    user.value = JSON.parse(localStorage.getItem("user"));
+    if (!user.value) {
+      router.push({ name: "login" });
+      return;
+    }
+
+    // Gets the user's project from the backend.
+    await ProjectServices.getProjectsByUserId(user.value.id)
+      .then((response) => {
+        // Saves the first project id.
+        projectId.value = response.data[0].id;
+      })
+      .catch((error) => {
+        console.log(error);
+      });
 
     // Get repos associated with the current project from the database
     await RepoServices.getReposByProjectId(projectId.value)
@@ -94,87 +86,50 @@ onMounted(async () => {
       .catch((error) => {
         console.log(error);
       });
-  
-  // Gets the project's columns from the backend.
-  await getColumns();
-  // Gets the user assignees from the backend
-  await getAssignees();
-  // Gets the stories from the backend.
-  await getStories();
-});
 
-// Gets the columns for the project.
-async function getColumns() {
-  if (!projectId.value) {
-    // if no project use fallback.
-    projectColumns.value = fallbackColumns;
-    buildColumns();
-    return;
+    // Gets the user assignees from the backend
+    await getAssignees();
+    // Gets the stories from the backend.
+    await getStories();
+  });
+
+  // Gets the members of the project so they can be picked as an assignee.
+  async function getAssignees() {
+    if (!projectId.value) {
+      return;
+    }
+
+    // Gets the members of the project from the backend.
+    await ProjectMembershipServices.getMembershipsByProjectId(projectId.value)
+      .then((response) => {
+        const options = [];
+        //loops through members and adds them to options array.
+        for (let i = 0; i < response.data.length; i++) {
+          const membership = response.data[i];
+          options.push({
+            title: membership.user.firstName + " " + membership.user.lastName,
+            value: membership.user.id,
+            email: membership.user.email,
+          });
+        }
+        assigneeOptions.value = options;
+      })
+      .catch((error) => {
+        console.log(error);
+      });
   }
 
-  await ProjectColumnServices.getColumnsForProject(projectId.value)
-    .then((response) => {
-      projectColumns.value = response.data;
-      buildColumns();
-    })
-    .catch((error) => {
-      console.log(error);
-    });
-}
-
-// Gets the members of the project so they can be picked as an assignee.
-async function getAssignees() {
-  if (!projectId.value) {
-    return;
-  }
-
-  // Gets the members of the project from the backend.
-  await ProjectMembershipServices.getMembershipsByProjectId(projectId.value)
-    .then((response) => {
-      const options = [];
-      //loops through members and adds them to options array.
-      for (let i = 0; i < response.data.length; i++) {
-        const membership = response.data[i];
-        options.push({
-          title: membership.user.firstName + " " + membership.user.lastName,
-          value: membership.user.id,
-          email: membership.user.email,
-        });
-      }
-      assigneeOptions.value = options;
-    })
-    .catch((error) => {
-      console.log(error);
-    });
-}
-
-// Gets stories for the project.
-async function getStories() {
-  await StoryboardServices.getStoriesForProject(projectId.value)
-    .then((response) => {
-      // Saves the stories from the backend.
-      stories.value = response.data;
-      buildColumns();
-    })
-    .catch((error) => {
-      console.log(error);
-    });
-}
-
-function buildColumns() {
-  // Temp array to hold all columns before updating columns.value.
-  const columnList = [];
-
-  // Creates each storyboard column using the project's columns.
-  for (let i = 0; i < projectColumns.value.length; i++) {
-    columnList.push({
-      id: projectColumns.value[i].id,
-      title: projectColumns.value[i].title,
-
-      // Starts columns with empty story list.
-      stories: [],
-    });
-
+  // Gets stories for the project.
+  async function getStories() {
+    await StoryboardServices.getStoriesForProject(projectId.value)
+      .then((response) => {
+        // Saves the stories from the backend.
+        stories.value = response.data;
+        buildColumns();
+      })
+      .catch((error) => {
+        console.log(error);
+      });
   }
 
   // Get branches associated with current project from Github API
@@ -397,9 +352,8 @@ function buildColumns() {
     await getStories();
     showDialog.value = false;
   }
-}
-  
-async function deleteStory() {
+
+  async function deleteStory() {
     try {
       // Send story id to backend to delete it.
       await StoryboardServices.deleteStory(editingStoryId.value);
@@ -417,109 +371,22 @@ async function deleteStory() {
     // from newBranch
     editingBranch.value = newBranch;
   }
-
-// Saves a column's edited title.
-async function saveColumnTitle(column) {
-  await ProjectColumnServices.updateColumn(column.id, {
-    title: column.title,
-    role: user.value.role,
-  });
-  await getColumns();
-}
-
-// Adds a new column at the end.
-async function addColumn() {
-  if (newColumnTitle.value === "") {
-    return;
-  }
-
-  await ProjectColumnServices.addColumn({
-    title: newColumnTitle.value,
-    displayOrder: projectColumns.value.length + 1,
-    projectId: projectId.value,
-    role: user.value.role,
-  });
-
-  newColumnTitle.value = "";
-  await getColumns();
-}
-
-// Deletes a column.
-async function deleteColumn(columnId) {
-  await ProjectColumnServices.deleteColumn(columnId, user.value.role);
-  await getColumns();
-}
-
-// Saves the column being dragged, for reordering.
-function startColumnDrag(column) {
-  draggedColumn.value = column;
-}
-
-// Outlines the column row being dragged over.
-function dragEnterColumn(columnId) {
-  hoverColumnRowId.value = columnId;
-}
-
-
-
-// Reorders columns when one is dropped onto another.
-async function dropColumn(targetColumn) {
-  hoverColumnRowId.value = null;
-
-  if (draggedColumn.value === null || draggedColumn.value.id === targetColumn.id) {
-    draggedColumn.value = null;
-    return;
-  }
-
-  const fromIndex = projectColumns.value.indexOf(draggedColumn.value);
-  const toIndex = projectColumns.value.indexOf(targetColumn);
-
-  // Take 1 column out of the array and insert it at the new index.
-  // Splice: https://www.w3schools.com/jsref/jsref_splice.asp
-  projectColumns.value.splice(fromIndex, 1);
-  projectColumns.value.splice(toIndex, 0, draggedColumn.value);
-
-  // Saves the new display order for every column.
-  for (let i = 0; i < projectColumns.value.length; i++) {
-    await ProjectColumnServices.updateColumn(projectColumns.value[i].id, {
-      title: projectColumns.value[i].title,
-      displayOrder: i + 1,
-      role: user.value.role,
-    });
-  }
-
-  draggedColumn.value = null;
-  await getColumns();
-}
 </script>
 
 <template>
   <!-- fluid makes it use the full width. -->
   <v-container fluid>
-
-    <div class="d-flex align-center">
-      <v-card-title class="pl-0 text-h4 font-weight-bold">
-        Storyboard
-      </v-card-title>
-
-      <!-- Only leads and admins can manage columns. -->
-      <v-btn
-        v-if="canManageColumns"
-        color="primary"
-        variant="outlined"
-        class="ml-4"
-        @click="showColumnDialog = true"
-      >
-        Manage Columns
-      </v-btn>
-    </div>
+    <v-card-title class="pl-0 text-h4 font-weight-bold">
+      Storyboard
+    </v-card-title>
 
     <!-- Holds all storyboard columns in a horizontal row. -->
     <div class="storyboard-columns">
       <!-- Loops through each storyboard column and displays it. -->
       <div
         :class="{ 'dragging-active': hoverColumnId === column.id }"
-        v-for="column in columns" :key="column.id"
+        v-for="column in columns"
+        :key="column.title"
         class="storyboard-column"
         @dragover.prevent="dragEnter(column.id)"
         @drop="dropStory(column.id)"
@@ -713,69 +580,6 @@ async function dropColumn(targetColumn) {
         </v-card-actions>
       </v-card>
     </v-dialog>
-
-    <!-- Manage Columns dialog, leads only. -->
-    <v-dialog v-model="showColumnDialog" width="500">
-      <v-card>
-        <v-card-title>Manage Columns</v-card-title>
-
-        <v-card-text>
-          <!-- Existing columns. -->
-          <div
-            v-for="column in projectColumns" :key="column.id"
-            :class="{ 'dragging-active': hoverColumnRowId === column.id }"
-            class="d-flex align-center mb-2 column-row"
-            draggable="true"
-            @dragstart="startColumnDrag(column)"
-            @dragover.prevent="dragEnterColumn(column.id)"
-            @drop="dropColumn(column)"
-          >
-            <v-icon icon="mdi-drag" class="mr-2" style="cursor: grab;"></v-icon>
-
-            <v-text-field
-              v-model="column.title"
-              density="compact"
-              hide-details
-              @blur="saveColumnTitle(column)"
-            ></v-text-field>
-
-            <v-btn
-              icon="mdi-delete"
-              size="small"
-              variant="text"
-              color="red"
-              class="ml-2"
-              @click="deleteColumn(column.id)"
-            ></v-btn>
-          </div>
-
-          <!-- Adds a new column at the end. -->
-          <div class="d-flex align-center mt-4">
-            <v-text-field
-              v-model="newColumnTitle"
-              label="New column title"
-              density="compact"
-              hide-details
-            ></v-text-field>
-
-            <v-btn
-              color="primary"
-              variant="text"
-              class="ml-2"
-              @click="addColumn"
-            >
-              Add
-            </v-btn>
-          </div>
-        </v-card-text>
-
-        <v-card-actions>
-          <v-spacer></v-spacer>
-          <v-btn variant="text" @click="showColumnDialog = false">Close</v-btn>
-        </v-card-actions>
-      </v-card>
-    </v-dialog>
-
     <!-- Error snackbar for project errors. -->
     <v-snackbar
       v-model="showProjectError"
@@ -789,6 +593,47 @@ async function dropColumn(targetColumn) {
 </template>
 
 <style scoped>
+  .storyboard-columns {
+    display: flex;
+    gap: 16px;
+    overflow-x: auto;
+    align-items: flex-start;
+  }
+
+  .storyboard-column {
+    min-width: 280px;
+    max-width: 280px;
+  }
+
+  .column-header {
+    display: flex;
+    align-items: center;
+    margin-bottom: 8px;
+  }
+
+  .story-card {
+    margin-bottom: 12px;
+    cursor: pointer;
+  }
+
+  .drop-here {
+    border: 1px dashed #ccc;
+    border-radius: 4px;
+    padding: 24px 8px;
+    text-align: center;
+  }
+
+  .dragging-active {
+    border: 2px solid #0a3158;
+    background-color: rgba(12, 57, 103, 0.08);
+    padding-bottom: 35px;
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+  .story-dialog-card {
+    transform: translateY(-56px);
+  }
+
   .form-label {
     font-size: 0.72rem;
     font-weight: 700;
@@ -796,57 +641,4 @@ async function dropColumn(targetColumn) {
     color: #8b1a35;
     margin-bottom: 4px;
   }
-
-.storyboard-columns {
-  display: flex;
-  gap: 16px;
-  overflow-x: auto;
-  align-items: flex-start;
-  width: 100%;
-  max-width: 100%;
-  /* Fills screen so scrollbar is at the bottom. */
-  height: calc(100vh - 135px);
-}
-
-.storyboard-column {
-  min-width: 280px;
-  max-width: 280px;
-  flex-shrink: 0;
-  /* Lets each column scroll down. */
-  height: 100%;
-  overflow-y: auto;
-}
-
-.column-header {
-  display: flex;
-  align-items: center;
-  margin-bottom: 8px;
-}
-
-.story-card {
-  margin-bottom: 12px;
-  cursor: pointer;
-}
-
-.drop-here {
-  border: 1px dashed #ccc;
-  border-radius: 4px;
-  padding: 24px 8px;
-  text-align: center;
-}
-
-.dragging-active {
-  border: 2px solid #0a3158;
-  background-color: rgba(12, 57, 103, 0.08);
-  padding-bottom: 35px;
-  padding-left: 10px;
-  padding-right: 10px;
-}
-
-.column-row.dragging-active {
-  padding-bottom: 4px;
-}
-.story-dialog-card {  
-transform: translateY(-56px);
-}
 </style>
