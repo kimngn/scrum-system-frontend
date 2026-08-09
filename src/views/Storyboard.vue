@@ -7,6 +7,7 @@ import ProjectMembershipServices from "../services/ProjectMembershipServices.js"
 import StoryAssigneeServices from "../services/StoryAssigneeServices.js";
 import ProjectColumnServices from "../services/ProjectColumnServices.js";
 import SprintServices from "../services/SprintServices.js";
+import ChatWidget from "../components/ChatWidget.vue";
 
 // Columns shown when the user isn't assigned to a project so the storyboard has the error snackbar.
 const fallbackColumns = [
@@ -142,6 +143,21 @@ async function getSprints() {
   await SprintServices.getSprintsByProjectId(projectId.value)
     .then((response) => {
       sprints.value = response.data;
+
+      // Clears the restored sprint filter if that sprint no longer exists.
+      if (selectedSprintId.value !== null) {
+        let sprintStillExists = false;
+        for (let i = 0; i < sprints.value.length; i++) {
+          if (sprints.value[i].id === selectedSprintId.value) {
+            sprintStillExists = true;
+          }
+        }
+
+        if (!sprintStillExists) {
+          selectedSprintId.value = null;
+          localStorage.removeItem("storyboardSprintId");
+        }
+      }
     })
     .catch((error) => {
       console.log(error);
@@ -811,6 +827,9 @@ async function dropColumn(targetColumn) {
     >
       You must be in a project before creating a user story.
     </v-snackbar>
+
+    <!-- Chatbot for asking questions about this project's stories and sprints. -->
+    <ChatWidget :project-id="projectId"></ChatWidget>
 
   </v-container>
 </template>
