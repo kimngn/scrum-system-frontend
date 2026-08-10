@@ -7,23 +7,19 @@
   import StoryAssigneeServices from "../services/StoryAssigneeServices.js";
   import ProjectColumnServices from "../services/ProjectColumnServices.js";
   import SprintServices from "../services/SprintServices.js";
+  import ChatWidget from "../components/ChatWidget.vue";
+  import GithubSection from "../components/GithubSection.vue";
+  import RepoServices from "../services/RepoServices.js";
+  import BranchServices from "../services/BranchServices.js";
 
   // Columns shown when the user isn't assigned to a project so the storyboard has the error snackbar.
   const fallbackColumns = [
-    { id: 1, title: "Backlog", type: "Does nothing" },
-    { id: 2, title: "To Do", type: "Does nothing" },
-    { id: 3, title: "In Progress", type: "Creates a new branch" },
-    { id: 4, title: "Ready for Test", type: "Creates a new PR" },
-    { id: 5, title: "Testing", type: "Does nothing" },
-    { id: 6, title: "Done", type: "Does nothing" },
-  ];
-
-  // For type dropdown
-  // types are currently hard coded instead of having an enum, will get to that later if there's enough time
-  const typeOptions = [
-    "Does nothing",
-    "Creates a new PR",
-    "Creates a new branch",
+    { id: 1, title: "Backlog" },
+    { id: 2, title: "To Do" },
+    { id: 3, title: "In Progress" },
+    { id: 4, title: "Ready for Test" },
+    { id: 5, title: "Testing" },
+    { id: 6, title: "Done" },
   ];
 
   const priorityOptions = ["Critical", "High", "Medium", "Low"];
@@ -55,16 +51,14 @@
   const canManageColumns = ref(false);
   const showColumnDialog = ref(false);
   const newColumnTitle = ref("");
-  const newColumnType = ref("Does nothing");
   const draggedColumn = ref(null);
   const hoverColumnRowId = ref(null);
 
-  // Snackbar
-  const snackbar = ref({
-    value: false,
-    color: "",
-    text: "",
-  });
+  // Variables related to branch + pull requests
+  const repos = ref([]);
+  const branches = ref([]);
+  const editingBranch = ref(null);
+  const newBranch = ref(null);
 
   // Sprint dropdown used to filter the board. Null shows every sprint.
   const sprintFilterOptions = computed(() => {
@@ -91,7 +85,6 @@
   });
 
   onMounted(async () => {
-    // Gets the logged in user from local storage.
     user.value = JSON.parse(localStorage.getItem("user"));
     if (!user.value) {
       router.push({ name: "login" });
@@ -100,28 +93,34 @@
     canManageColumns.value =
       user.value.role === "lead" || user.value.role === "admin";
 
-    // Gets every project the user belongs to.
     await ProjectServices.getProjectsByUserId(user.value.id)
       .then((response) => {
         userProjects.value = response.data;
-
-        // Restores the last selected project, if it still belongs to the user.
+        // Gets the last selected project.
         const savedProjectId = Number(
           localStorage.getItem("storyboardProjectId"),
         );
         let savedProjectStillExists = false;
+        // Checks if the saved project is still one of the user's projects.
         for (let i = 0; i < userProjects.value.length; i++) {
           if (userProjects.value[i].id === savedProjectId) {
             savedProjectStillExists = true;
           }
         }
-
+        // Uses the saved project if it still exists.
         if (savedProjectStillExists) {
           projectId.value = savedProjectId;
         } else if (userProjects.value.length > 0) {
-          // Falls back to the first project.
           projectId.value = userProjects.value[0].id;
         }
+      })
+      .catch((error) => {
+        console.log(error);
+      });
+    // Gets the repos for the selected project.
+    await RepoServices.getReposByProjectId(projectId.value)
+      .then((response) => {
+        repos.value = response.data;
       })
       .catch((error) => {
         console.log(error);
@@ -146,7 +145,7 @@
     await getStories();
   }
 
-  // Runs when the user picks a changes the project.
+  // Runs when the user picks a different project from the dropdown.
   async function changeProject() {
     // Remembers the selected project so refreshing doesn't reset it.
     localStorage.setItem("storyboardProjectId", projectId.value);
@@ -157,7 +156,7 @@
     await loadProjectData();
   }
 
-  // Get sprints for the sprint filter dropdown.
+  // Gets the sprints for the project, for the sprint filter dropdown.
   async function getSprints() {
     if (!projectId.value) {
       sprints.value = [];
@@ -167,6 +166,19 @@
     await SprintServices.getSprintsByProjectId(projectId.value)
       .then((response) => {
         sprints.value = response.data;
+
+        // Reset the filter if the saved sprint no longer belongs to this project.
+        let sprintStillExists = false;
+        for (let i = 0; i < sprints.value.length; i++) {
+          if (sprints.value[i].id === selectedSprintId.value) {
+            sprintStillExists = true;
+          }
+        }
+        // Clears the  filter if the sprint doesn't exist.
+        if (selectedSprintId.value !== null && !sprintStillExists) {
+          selectedSprintId.value = null;
+          localStorage.removeItem("storyboardSprintId");
+        }
       })
       .catch((error) => {
         console.log(error);
@@ -252,7 +264,6 @@
       columnList.push({
         id: projectColumns.value[i].id,
         title: projectColumns.value[i].title,
-        type: projectColumns.value[i].type,
 
         // Starts columns with empty story list.
         stories: [],
@@ -311,6 +322,7 @@
     editingAssigneeIds.value = [];
     formSprintId.value = selectedSprintId.value;
     showDialog.value = true;
+    editingBranch.value = null;
   }
 
   // Opens the dialog filled with the selected story's info
@@ -354,20 +366,8 @@
     hoverColumnId.value = columnId;
   }
 
-  async function dropStory(columnId, columnType) {
+  async function dropStory(columnId) {
     hoverColumnId.value = null;
-    console.log("Column type: " + columnType);
-    console.log("Column ID: " + columnId);
-
-    if (columnType == "Do nothing") {
-      console.log("Do nothing!");
-    } else if (columnType == "Creates a new PR") {
-      console.log("Trigger PR creation for story:" + draggedStory.value.title);
-      await triggerPR();
-      console.log("PR created!");
-    } else if (columnType == "Creates a new branch") {
-      console.log("Branch created!");
-    }
 
     // If story is dropped in the same column do nothing.
     if (draggedStory.value.columnId === columnId) {
@@ -396,7 +396,7 @@
 
     draggedStory.value = null;
   }
-  async function saveStory() {
+  async function saveStory(editingBranch) {
     // Title can't be empty.
     if (formTitle.value === "") {
       return;
@@ -426,6 +426,43 @@
       // Creates the new story and saves its id.
       const response = await StoryboardServices.createStory(story);
       storyId = response.data.id;
+    }
+
+    var branch = null;
+    editingStoryId.value = storyId;
+    // better fix may be to just allow these fields to be nullable in the model
+    if (!editingBranch) {
+      // user left dropdown blank
+    } else if (isEditing.value && editingBranch.dbBranch?.id) // for Edit dialog
+    {
+      branch = {
+        id: editingBranch.dbBranch.id,
+        title: editingBranch.name,
+        storyId: editingBranch.dbBranch.storyId,
+        repoId: editingBranch.dbBranch.repoId,
+        columnId: editingBranch.dbBranch.columnId,
+      };
+      await BranchServices.updateBranch(branch);
+      console.log("Branch updated");
+    } else {
+      // for Create dialog
+      branch = {
+        title: editingBranch.name,
+        userStoryId: storyId,
+        repoId: editingBranch.repoId,
+        columnId: selectedColumnId.value,
+      };
+      console.log("Sending branch:", branch);
+      try {
+        await BranchServices.addBranch(branch);
+      } catch (error) {
+        if (error.response) {
+          console.error("Error response:", error.response.data);
+        } else {
+          console.error("Error:", error.message);
+        }
+      }
+      console.log("Branch created");
     }
 
     // Adds the currently selected assignees.
@@ -472,7 +509,6 @@
       title: newColumnTitle.value,
       displayOrder: projectColumns.value.length + 1,
       projectId: projectId.value,
-      type: newColumnType.value,
       role: user.value.role,
     });
 
@@ -529,18 +565,10 @@
     await getColumns();
   }
 
-  // Trigger PR creation
-  async function triggerPR() {
-    try {
-      let pr = {
-        head: "...", // branch with changes
-        base: "...", // branch that the head is being merged into
-      };
-
-      StoryboardServices.triggerPR(draggedStory.value, pr);
-    } catch (error) {
-      console.log(error);
-    }
+  // don't want saveStory to trigger every time the user changes the branch dropdown value (closes dialog popup too early)
+  function onBranchUpdate(newBranch) {
+    // from newBranch
+    editingBranch.value = newBranch;
   }
 </script>
 
@@ -713,7 +741,7 @@
     </div>
 
     <!-- Popup dialog. -->
-    <v-dialog v-model="showDialog" width="500">
+    <v-dialog v-model="showDialog" width="1000">
       <v-card class="story-dialog-card">
         <v-card-title>
           {{ isEditing ? "Edit User Story" : "New User Story" }}
@@ -759,6 +787,20 @@
             label="Sprint"
           ></v-select>
 
+          <v-row class="mb-5">
+            <!-- Github information -->
+            <v-col cols="12">
+              <div class="form-label">GITHUB BRANCH</div>
+              <GithubSection
+                :storyId="editingStoryId"
+                :repos="repos"
+                @updateBranch="onBranchUpdate"
+              />
+              <!-- when child changes value, run saveStory() -->
+              <!-- @updateBranch holds value, stores it in newBranch ref, newBranch goes into onBranchUpdate -->
+            </v-col>
+          </v-row>
+
           <!-- Shows assignees email under name -->
           <v-select
             v-model="formAssignee"
@@ -789,7 +831,9 @@
           <!-- Spacing for save button. -->
           <v-spacer></v-spacer>
 
-          <v-btn color="green" variant="text" @click="saveStory"> Save </v-btn>
+          <v-btn color="green" variant="text" @click="saveStory(editingBranch)">
+            Save
+          </v-btn>
         </v-card-actions>
       </v-card>
     </v-dialog>
@@ -881,6 +925,9 @@
     >
       You must be in a project before creating a user story.
     </v-snackbar>
+
+    <!-- Chatbot for asking questions about this project's stories and sprints. -->
+    <ChatWidget :project-id="projectId"></ChatWidget>
   </v-container>
 </template>
 
@@ -935,20 +982,6 @@
     padding-bottom: 4px;
   }
   .story-dialog-card {
-    transform: translateY(-56px);
-  }
-
-  .form-label {
-    font-size: 0.72rem;
-    font-weight: 700;
-    letter-spacing: 0.07em;
-    color: #8b1a35;
-    margin-bottom: 4px;
-  }
-  .newColumn {
-    border-style: solid;
-    border-color: grey;
-    padding: 6%;
-    border-radius: 15px;
+    transform: translateY(-20px);
   }
 </style>
