@@ -106,10 +106,14 @@
         </template>
 
         <!-- Title -->
-        <template v-slot:item.title="{ item }">
-          <div class="font-weight-medium">
+       <template v-slot:item.title="{ item }">
+          <v-btn
+            variant="text"
+            class="text-none px-0 font-weight-medium"
+            @click="openStoryDetails(item)"
+          >
             {{ item.title }}
-          </div>
+          </v-btn>
         </template>
 
         <!-- Priority -->
@@ -305,492 +309,373 @@
         </v-card-actions>
       </v-card>
     </v-dialog>
+
+    <!--Edit User Story / Story Detail Dialog -->
+    <v-dialog
+      v-model="storyDetailDialog"
+      max-width="1050"
+      persistent
+    >
+      <v-card rounded="lg">
+        <!-- Header -->
+        <v-card-title
+          class="d-flex justify-space-between align-center px-6 py-4"
+        >
+          <div>
+            <div class="text-caption text-grey">
+              {{ selectedProjectName }}
+              · STORY-{{ selectedStory?.id }}
+            </div>
+
+            <div class="text-h6 font-weight-bold">
+              User Story Details
+            </div>
+          </div>
+
+          <div class="d-flex ga-2">
+            <v-btn
+              color="primary"
+              :loading="savingStoryDetails"
+              @click="saveStoryDetails"
+            >
+              Save Changes
+            </v-btn>
+
+            <v-btn
+              icon="mdi-close"
+              variant="text"
+              :disabled="savingStoryDetails"
+              @click="closeStoryDetails"
+            />
+          </div>
+        </v-card-title>
+
+        <v-divider />
+
+        <v-card-text class="pa-0">
+          <v-row no-gutters>
+            <!-- LEFT SIDE -->
+            <v-col
+              cols="12"
+              md="8"
+              class="pa-6"
+            >
+              <!-- Title -->
+              <v-text-field
+                v-model="storyEdit.title"
+                label="Title"
+                variant="outlined"
+                :rules="titleRules"
+              />
+
+              <!-- Description -->
+              <v-textarea
+                v-model="storyEdit.description"
+                label="Description"
+                variant="outlined"
+                rows="4"
+                auto-grow
+              />
+            </v-col>
+
+            <!-- RIGHT SIDE -->
+            <v-col
+              cols="12"
+              md="4"
+              class="pa-6 story-sidebar"
+            >
+              <!-- Story Points -->
+              <v-select
+                v-model="storyEdit.storyPoint"
+                :items="storyPointOptions"
+                label="Story Points"
+                variant="outlined"
+              />
+
+              <!-- Status -->
+              <v-select
+                v-model="storyEdit.columnId"
+                :items="projectColumns"
+                item-title="title"
+                item-value="id"
+                label="Status"
+                variant="outlined"
+                :loading="loadingColumns"
+              />
+
+              <!-- Priority -->
+              <v-select
+                v-model="storyEdit.priority"
+                :items="priorities"
+                label="Priority"
+                variant="outlined"
+              />
+
+              <!-- Assignees -->
+              <v-select
+                v-model="storyEdit.assigneeIds"
+                :items="projectMembers"
+                item-title="fullName"
+                item-value="id"
+                label="Assignees"
+                variant="outlined"
+                multiple
+                chips
+                closable-chips
+                clearable
+                :loading="loadingMembers"
+              />
+
+              <v-divider class="my-4" />
+
+              <div class="text-caption text-grey">
+                PROJECT
+              </div>
+
+              <div class="mb-4">
+                {{ selectedProjectName }}
+              </div>
+
+              <div class="text-caption text-grey">
+                CREATED
+              </div>
+
+              <div>
+                {{ formatDate(selectedStory?.createdAt) }}
+              </div>
+            </v-col>
+          </v-row>
+        </v-card-text>
+
+        <v-alert
+          v-if="storyDetailError"
+          type="error"
+          variant="tonal"
+          class="ma-4"
+        >
+          {{ storyDetailError }}
+        </v-alert>
+      </v-card>
+    </v-dialog>
   </v-container>
 </template>
 
 <script setup>
-import {
-  computed,
-  onMounted,
-  ref,
-} from "vue";
+  import {
+    computed,
+    onMounted,
+    ref,
+  } from "vue";
 
-import StoryboardServices from "../services/StoryboardServices.js";
-import StoryAssigneeServices from "../services/StoryAssigneeServices.js";
-import ProjectServices from "../services/ProjectServices.js";
-import ProjectMembershipServices from "../services/ProjectMembershipServices.js";
+  import StoryboardServices from "../services/StoryboardServices.js";
+  import StoryAssigneeServices from "../services/StoryAssigneeServices.js";
+  import ProjectServices from "../services/ProjectServices.js";
+  import ProjectMembershipServices from "../services/ProjectMembershipServices.js";
+  import ProjectColumnServices from "../services/ProjectColumnServices.js";
 
 
 
-const user = ref(
-  JSON.parse(localStorage.getItem("user"))
-);
+  const user = ref(
+    JSON.parse(localStorage.getItem("user"))
+  );
 
-// Project state
-const userProjects = ref([]);
-const projectId = ref(null);
-const backlogColumnId = ref(null);
+  // Project state
+  const userProjects = ref([]);
+  const projectId = ref(null);
+  const backlogColumnId = ref(null);
 
-// Story state
-const stories = ref([]);
-const projectMembers = ref([]);
+  // Story state
+  const stories = ref([]);
+  const projectMembers = ref([]);
 
-// Loading state
-const loadingProjects = ref(false);
-const loadingStories = ref(false);
-const loadingMembers = ref(false);
-const creatingStory = ref(false);
+  // Loading state
+  const loadingProjects = ref(false);
+  const loadingStories = ref(false);
+  const loadingMembers = ref(false);
+  const creatingStory = ref(false);
 
-// Error state
-const pageError = ref("");
-const createStoryError = ref("");
-
-// Dialog state
-const createStoryDialog = ref(false);
-const createStoryFormRef = ref(null);
-
-// Filters
-const search = ref("");
-const selectedStatus = ref("All");
-
-const statuses = [
-  "All",
-  "Backlog",
-  "To Do",
-  "In Progress",
-  "Ready for Test",
-  "Testing",
-  "Done",
-];
-
-const priorities = [
-  "Critical",
-  "High",
-  "Medium",
-  "Low",
-];
-
-const storyPointOptions = [
-  1,
-  2,
-  3,
-  5,
-  8,
-  13,
-];
-
-const headers = [
-  {
-    title: "ID",
-    key: "id",
-  },
-  {
-    title: "Title",
-    key: "title",
-  },
-  {
-    title: "Priority",
-    key: "priority",
-  },
-  {
-    title: "Status",
-    key: "status",
-  },
-  {
-    title: "PTS",
-    key: "storyPoint",
-  },
-  {
-    title: "Assignee",
-    key: "assignee",
-    sortable: false,
-  },
-  {
-    title: "Sprint",
-    key: "Sprint_id",
-  },
-];
-
-const titleRules = [
-  (value) =>
-    Boolean(value?.trim()) || "Title is required",
-];
-
-function getDefaultStory() {
-  return {
+  //Project Column state
+  const storyDetailDialog = ref(false);
+  const selectedStory = ref(null);
+  const savingStoryDetails = ref(false);
+  const storyDetailError = ref("");
+ 
+  const storyEdit = ref({
     title: "",
     description: "",
     priority: "Medium",
     storyPoint: 3,
+    columnId: 1,
     assigneeIds: [],
-  };
-}
-
-const newStory = ref(getDefaultStory());
-
-const selectedProjectName = computed(() => {
-  const selectedProject = userProjects.value.find(
-    (project) => project.id === projectId.value,
-  );
-
-  return selectedProject?.name ||
-    selectedProject?.title ||
-    "Unknown project";
-});
-
-const filteredStories = computed(() => {
-  const searchText =
-    search.value?.trim().toLowerCase() || "";
-
-  return stories.value.filter((story) => {
-    const title =
-      story.title?.toLowerCase() || "";
-
-    const description =
-      story.description?.toLowerCase() || "";
-
-    const matchesSearch =
-      !searchText ||
-      title.includes(searchText) ||
-      description.includes(searchText);
-
-    const matchesStatus =
-      selectedStatus.value === "All" ||
-      getStoryStatus(story) === selectedStatus.value;
-
-    return matchesSearch && matchesStatus;
   });
-});
-
-/*
- * Gets every project associated with the logged-in user.
- * The first project becomes the initial selection.
- */
-async function retrieveUserProjects() {
-  if (!user.value?.id) {
-    throw new Error(
-      "The logged-in user could not be found.",
-    );
-  }
-
-  try {
-    loadingProjects.value = true;
-
-    const response =
-      await ProjectServices.getProjectsByUserId(
-        user.value.id,
-      );
-
-    userProjects.value =
-      Array.isArray(response.data)
-        ? response.data
-        : [];
-
-    if (userProjects.value.length > 0) {
-      projectId.value = userProjects.value[0].id;
-    }
-  } finally {
-    loadingProjects.value = false;
-  }
-}
-
-/*
- * Runs whenever the user selects another project.
- */
-async function changeProject() {
-  pageError.value = "";
-  createStoryError.value = "";
-
-  stories.value = [];
-  projectMembers.value = [];
-  backlogColumnId.value = null;
-
-  search.value = "";
-  selectedStatus.value = "All";
-
-  if (!projectId.value) {
-    return;
-  }
-
-  await Promise.all([
-    retrieveStories(),
-    retrieveProjectMembers(),
-    retrieveBacklogColumn(),
-  ]);
-}
-
-/*
- * Gets stories only for the selected project.
- */
-async function retrieveStories() {
-  if (!projectId.value) {
-    return;
-  }
-
-  try {
-    loadingStories.value = true;
-
-    const response =
-      await StoryboardServices.getStoriesForProject(
-        projectId.value,
-      );
-console.log("retrieve stories", response)
-    stories.value =
-      Array.isArray(response.data)
-        ? response.data
-        : [];
-
-    findBacklogColumnFromStories();
-  } catch (error) {
-    console.error(
-      "Failed to retrieve stories:",
-      error,
-    );
-
-    pageError.value =
-      error.response?.data?.message ||
-      "The stories could not be loaded.";
-  } finally {
-    loadingStories.value = false;
-  }
-}
-
-/*
- * Uses the column data included with each story to locate
- * the selected project's Backlog column.
- */
-function findBacklogColumnFromStories() {
-  const backlogStory = stories.value.find(
-    (story) =>
-      story.column?.title
-        ?.trim()
-        .toLowerCase() === "backlog",
-  );
-
-  if (backlogStory?.columnId) {
-    backlogColumnId.value =
-      backlogStory.columnId;
-  }
-}
-
-/*
- * Gets members belonging to the selected project.
- */
-async function retrieveProjectMembers() {
-  if (!projectId.value) {
-    return;
-  }
-
-  try {
-    loadingMembers.value = true;
-
-    const response =
-      await ProjectMembershipServices.getMembershipsByProjectId(
-        projectId.value,
-      );
-  console.log("project members",response.data )
-
-    // const memberships =
-    //   Array.isArray(response.data)
-    //     ? response.data
-    //     : [];
-
-      projectMembers.value = response.data
-        .filter((membership) => membership.user)
-        .map((membership) => ({
-          id: membership.userId,
-          fullName:
-            `${membership.user.firstName} ${membership.user.lastName}`.trim(),
-        }));
-        console.log("assignee dropdown", projectMembers.value)
-  } catch (error) {
-    console.error(
-      "Failed to retrieve project members:",
-      error,
-    );
-
-    projectMembers.value = [];
-  } finally {
-    loadingMembers.value = false;
-  }
-}
 
 
-async function openCreateStoryDialog() {
-  if (!projectId.value) {
-    pageError.value =
-      "Select a project before creating a story.";
+  // Error state
+  const pageError = ref("");
+  const createStoryError = ref("");
 
-    return;
-  }
+  // Dialog state
+  const createStoryDialog = ref(false);
+  const createStoryFormRef = ref(null);
 
-  newStory.value = getDefaultStory();
-  createStoryError.value = "";
-  createStoryDialog.value = true;
+  // Filters
+  const search = ref("");
+  const selectedStatus = ref("All");
 
-  await Promise.all([
-    retrieveProjectMembers(),
-    retrieveBacklogColumn(),
-  ]);
-}
+  const statuses = [
+    "All",
+    "Backlog",
+    "To Do",
+    "In Progress",
+    "Ready for Test",
+    "Testing",
+    "Done",
+  ];
 
-function closeCreateStoryDialog() {
-  if (creatingStory.value) {
-    return;
-  }
+  const priorities = [
+    "Critical",
+    "High",
+    "Medium",
+    "Low",
+  ];
 
-  createStoryDialog.value = false;
-  createStoryError.value = "";
-  newStory.value = getDefaultStory();
+  const storyPointOptions = [
+    1,
+    2,
+    3,
+    5,
+    8,
+    13,
+  ];
 
-  createStoryFormRef.value?.resetValidation();
-}
+  const headers = [
+    {
+      title: "ID",
+      key: "id",
+    },
+    {
+      title: "Title",
+      key: "title",
+    },
+    {
+      title: "Priority",
+      key: "priority",
+    },
+    {
+      title: "Status",
+      key: "status",
+    },
+    {
+      title: "PTS",
+      key: "storyPoint",
+    },
+    {
+      title: "Assignee",
+      key: "assignee",
+      sortable: false,
+    },
+    {
+      title: "Sprint",
+      key: "Sprint_id",
+    },
+  ];
 
-/*
- * Creates a story and then creates its storyAssignee
- * records separately.
- */
-async function createStory() {
-  createStoryError.value = "";
+  const titleRules = [
+    (value) =>
+      Boolean(value?.trim()) || "Title is required",
+  ];
 
-  const validation =
-    await createStoryFormRef.value?.validate();
-
-  if (validation && !validation.valid) {
-    return;
-  }
-
-  if (!projectId.value) {
-    createStoryError.value =
-      "A project must be selected.";
-
-    return;
-  }
-
-
-  try {
-    creatingStory.value = true;
-
-    const story = {
-      title: newStory.value.title.trim(),
-      description:
-        newStory.value.description?.trim() || "",
-      priority: newStory.value.priority,
-      storyPoint:
-        Number(newStory.value.storyPoint),
-      projectId: projectId.value,
-      columnId: 1,
+  function getDefaultStory() {
+    return {
+      title: "",
+      description: "",
+      priority: "Medium",
+      storyPoint: 3,
+      assigneeIds: [],
     };
+  }
 
-    const response =
-      await StoryboardServices.createStory(story);
+  const newStory = ref(getDefaultStory());
 
-    const createdStoryId = response.data.id;
-
-    for (
-      const assigneeId of newStory.value.assigneeIds
-    ) {
-      await StoryAssigneeServices.addAssignee({
-        userStoryId: createdStoryId,
-        userId: assigneeId,
-      });
-    }
-
-    creatingStory.value = false;
-    closeCreateStoryDialog();
-
-    await retrieveStories();
-  } catch (error) {
-    console.error(
-      "Failed to create story:",
-      error,
+  const selectedProjectName = computed(() => {
+    const selectedProject = userProjects.value.find(
+      (project) => project.id === projectId.value,
     );
 
-    createStoryError.value =
-      error.response?.data?.message ||
-      "The user story could not be created.";
-  } finally {
-    creatingStory.value = false;
+    return selectedProject?.name ||
+      selectedProject?.title ||
+      "Unknown project";
+  });
+
+  const filteredStories = computed(() => {
+    const searchText =
+      search.value?.trim().toLowerCase() || "";
+
+    return stories.value.filter((story) => {
+      const title =
+        story.title?.toLowerCase() || "";
+
+      const description =
+        story.description?.toLowerCase() || "";
+
+      const matchesSearch =
+        !searchText ||
+        title.includes(searchText) ||
+        description.includes(searchText);
+
+      const matchesStatus =
+        selectedStatus.value === "All" ||
+        getStoryStatus(story) === selectedStatus.value;
+
+      return matchesSearch && matchesStatus;
+    });
+  });
+
+  /*
+  * Gets every project associated with the logged-in user.
+  * The first project becomes the initial selection.
+  */
+  async function retrieveUserProjects() {
+    if (!user.value?.id) {
+      throw new Error(
+        "The logged-in user could not be found.",
+      );
+    }
+
+    try {
+      loadingProjects.value = true;
+
+      const response =
+        await ProjectServices.getProjectsByUserId(
+          user.value.id,
+        );
+
+      userProjects.value =
+        Array.isArray(response.data)
+          ? response.data
+          : [];
+
+      if (userProjects.value.length > 0) {
+        projectId.value = userProjects.value[0].id;
+      }
+    } finally {
+      loadingProjects.value = false;
+    }
   }
-}
 
-function getStoryStatus(story) {
-  return (
-    story.status ||
-    story.column?.title ||
-    "Backlog"
-  );
-}
-
-function getAssigneeNames(story) {
-  if (!Array.isArray(story.assignee)) {
-    return "";
-  }
-
-  return story.assignee
-    .filter((assignment) => assignment.user)
-    .map((assignment) => {
-      const firstName =
-        assignment.user.firstName || "";
-
-      const lastName =
-        assignment.user.lastName || "";
-
-      return `${firstName} ${lastName}`.trim();
-    })
-    .filter(Boolean)
-    .join(", ");
-}
-
-function priorityColor(priority) {
-  switch (priority) {
-    case "Critical":
-      return "red";
-
-    case "High":
-      return "orange";
-
-    case "Medium":
-      return "amber";
-
-    case "Low":
-      return "grey";
-
-    default:
-      return "grey";
-  }
-}
-
-function statusColor(status) {
-  switch (status) {
-    case "Done":
-      return "green";
-
-    case "In Progress":
-      return "purple";
-
-    case "Testing":
-      return "orange";
-
-    case "Ready for Test":
-      return "blue";
-
-    case "To Do":
-      return "red";
-
-    case "Backlog":
-      return "grey";
-
-    default:
-      return "grey";
-  }
-}
-
-onMounted(async () => {
-  try {
+  /*
+  * Runs whenever the user selects another project.
+  */
+  async function changeProject() {
     pageError.value = "";
+    createStoryError.value = "";
 
-    await retrieveUserProjects();
+    stories.value = [];
+    projectMembers.value = [];
+    backlogColumnId.value = null;
+
+    search.value = "";
+    selectedStatus.value = "All";
 
     if (!projectId.value) {
       return;
@@ -799,20 +684,477 @@ onMounted(async () => {
     await Promise.all([
       retrieveStories(),
       retrieveProjectMembers(),
-    
+      retrieveBacklogColumn(),
     ]);
+  }
+
+  /*
+  * Gets stories only for the selected project.
+  */
+  async function retrieveStories() {
+    if (!projectId.value) {
+      return;
+    }
+
+    try {
+      loadingStories.value = true;
+
+      const response =
+        await StoryboardServices.getStoriesForProject(
+          projectId.value,
+        );
+  console.log("retrieve stories", response)
+      stories.value =
+        Array.isArray(response.data)
+          ? response.data
+          : [];
+
+      findBacklogColumnFromStories();
+    } catch (error) {
+      console.error(
+        "Failed to retrieve stories:",
+        error,
+      );
+
+      pageError.value =
+        error.response?.data?.message ||
+        "The stories could not be loaded.";
+    } finally {
+      loadingStories.value = false;
+    }
+  }
+
+  /*
+  * Uses the column data included with each story to locate
+  * the selected project's Backlog column.
+  */
+  function findBacklogColumnFromStories() {
+    const backlogStory = stories.value.find(
+      (story) =>
+        story.column?.title
+          ?.trim()
+          .toLowerCase() === "backlog",
+    );
+
+    if (backlogStory?.columnId) {
+      backlogColumnId.value =
+        backlogStory.columnId;
+    }
+  }
+
+  /*
+  * Gets members belonging to the selected project.
+  */
+  async function retrieveProjectMembers() {
+    if (!projectId.value) {
+      return;
+    }
+
+    try {
+      loadingMembers.value = true;
+
+      const response =
+        await ProjectMembershipServices.getMembershipsByProjectId(
+          projectId.value,
+        );
+    console.log("project members",response.data )
+
+      // const memberships =
+      //   Array.isArray(response.data)
+      //     ? response.data
+      //     : [];
+
+        projectMembers.value = response.data
+          .filter((membership) => membership.user)
+          .map((membership) => ({
+            id: membership.userId,
+            fullName:
+              `${membership.user.firstName} ${membership.user.lastName}`.trim(),
+          }));
+          console.log("assignee dropdown", projectMembers.value)
+    } catch (error) {
+      console.error(
+        "Failed to retrieve project members:",
+        error,
+      );
+
+      projectMembers.value = [];
+    } finally {
+      loadingMembers.value = false;
+    }
+  }
+
+
+  async function openCreateStoryDialog() {
+    if (!projectId.value) {
+      pageError.value =
+        "Select a project before creating a story.";
+
+      return;
+    }
+
+    newStory.value = getDefaultStory();
+    createStoryError.value = "";
+    createStoryDialog.value = true;
+
+    await Promise.all([
+      retrieveProjectMembers(),
+      retrieveBacklogColumn(),
+    ]);
+  }
+
+  function closeCreateStoryDialog() {
+    if (creatingStory.value) {
+      return;
+    }
+
+    createStoryDialog.value = false;
+    createStoryError.value = "";
+    newStory.value = getDefaultStory();
+
+    createStoryFormRef.value?.resetValidation();
+  }
+
+  /*
+  * Creates a story and then creates its storyAssignee
+  * records separately.
+  */
+  async function createStory() {
+    createStoryError.value = "";
+
+    const validation =
+      await createStoryFormRef.value?.validate();
+
+    if (validation && !validation.valid) {
+      return;
+    }
+
+    if (!projectId.value) {
+      createStoryError.value =
+        "A project must be selected.";
+
+      return;
+    }
+
+
+    try {
+      creatingStory.value = true;
+
+      const story = {
+        title: newStory.value.title.trim(),
+        description:
+          newStory.value.description?.trim() || "",
+        priority: newStory.value.priority,
+        storyPoint:
+          Number(newStory.value.storyPoint),
+        projectId: projectId.value,
+        columnId: 1,
+      };
+
+      const response =
+        await StoryboardServices.createStory(story);
+
+      const createdStoryId = response.data.id;
+
+      for (
+        const assigneeId of newStory.value.assigneeIds
+      ) {
+        await StoryAssigneeServices.addAssignee({
+          userStoryId: createdStoryId,
+          userId: assigneeId,
+        });
+      }
+
+      creatingStory.value = false;
+      closeCreateStoryDialog();
+
+      await retrieveStories();
+    } catch (error) {
+      console.error(
+        "Failed to create story:",
+        error,
+      );
+
+      createStoryError.value =
+        error.response?.data?.message ||
+        "The user story could not be created.";
+    } finally {
+      creatingStory.value = false;
+    }
+  }
+
+  function getStoryStatus(story) {
+    return (
+      story.status ||
+      story.column?.title ||
+      "Backlog"
+    );
+  }
+//this function is to open Story Details
+
+async function openStoryDetails(story) {
+  if (!story?.id) {
+    return;
+  }
+
+  selectedStory.value = story;
+  storyDetailError.value = "";
+
+  // Make sure current project members are available
+  // for the Assignees dropdown.
+  await retrieveProjectMembers();
+
+  const assignments =
+    Array.isArray(story.assignee)
+      ? story.assignee
+      : [];
+
+  storyEdit.value = {
+    title:
+      story.title || "",
+
+    description:
+      story.description || "",
+
+    priority:
+      story.priority || "Medium",
+
+    storyPoint:
+      story.storyPoint ?? 3,
+
+    columnId:
+      story.columnId ?? 1,
+
+    assigneeIds:
+      assignments
+        .map(
+          (assignment) =>
+            assignment.userId,
+        )
+        .filter(
+          (id) =>
+            id !== undefined &&
+            id !== null,
+        ),
+  };
+
+  storyDetailDialog.value = true;
+}
+
+function closeStoryDetails() {
+  if (savingStoryDetails.value) {
+    return;
+  }
+
+  storyDetailDialog.value = false;
+  selectedStory.value = null;
+  storyDetailError.value = "";
+
+  storyEdit.value = {
+    title: "",
+    description: "",
+    priority: "Medium",
+    storyPoint: 3,
+    columnId: 1,
+    assigneeIds: [],
+  };
+}
+
+//SAVE Story Changes
+async function saveStoryDetails() {
+  if (!selectedStory.value?.id) {
+    return;
+  }
+
+  if (!storyEdit.value.title.trim()) {
+    storyDetailError.value =
+      "Title is required.";
+
+    return;
+  }
+
+  try {
+    savingStoryDetails.value = true;
+    storyDetailError.value = "";
+
+    const storyId =
+      selectedStory.value.id;
+
+    // ---------------------------------
+    // 1. Update the UserStory
+    // ---------------------------------
+    const storyData = {
+      title:
+        storyEdit.value.title.trim(),
+
+      description:
+        storyEdit.value.description?.trim() ||
+        "",
+
+      priority:
+        storyEdit.value.priority,
+
+      storyPoint:
+        Number(storyEdit.value.storyPoint),
+
+      projectId:
+        projectId.value,
+
+      columnId:
+        storyEdit.value.columnId,
+    };
+
+    await StoryboardServices.updateStory(
+      storyId,
+      storyData,
+    );
+
+    // ---------------------------------
+    // 2. Delete old assignees
+    // ---------------------------------
+    const oldAssignments =
+      Array.isArray(
+        selectedStory.value.assignee,
+      )
+        ? selectedStory.value.assignee
+        : [];
+
+    for (
+      const assignment of oldAssignments
+    ) {
+      if (assignment.id) {
+        await StoryAssigneeServices.deleteAssignee(
+          assignment.id,
+        );
+      }
+    }
+
+    // ---------------------------------
+    // 3. Add selected assignees again
+    // ---------------------------------
+    for (
+      const userId of
+        storyEdit.value.assigneeIds
+    ) {
+      await StoryAssigneeServices.addAssignee({
+        userStoryId: storyId,
+        userId: userId,
+      });
+    }
+
+    // ---------------------------------
+    // 4. Refresh page
+    // ---------------------------------
+    await retrieveStories();
+
+    savingStoryDetails.value = false;
+
+    closeStoryDetails();
   } catch (error) {
     console.error(
-      "Failed to initialize backlog:",
+      "Failed to update story:",
       error,
     );
 
-    pageError.value =
+    storyDetailError.value =
       error.response?.data?.message ||
-      error.message ||
-      "The backlog page could not be loaded.";
+      "The user story could not be updated.";
+  } finally {
+    savingStoryDetails.value = false;
   }
-});
+}
+
+  function getAssigneeNames(story) {
+    if (!Array.isArray(story.assignee)) {
+      return "";
+    }
+
+    return story.assignee
+      .filter((assignment) => assignment.user)
+      .map((assignment) => {
+        const firstName =
+          assignment.user.firstName || "";
+
+        const lastName =
+          assignment.user.lastName || "";
+
+        return `${firstName} ${lastName}`.trim();
+      })
+      .filter(Boolean)
+      .join(", ");
+  }
+
+  function priorityColor(priority) {
+    switch (priority) {
+      case "Critical":
+        return "red";
+
+      case "High":
+        return "orange";
+
+      case "Medium":
+        return "amber";
+
+      case "Low":
+        return "grey";
+
+      default:
+        return "grey";
+    }
+  }
+
+  function statusColor(status) {
+    switch (status) {
+      case "Done":
+        return "green";
+
+      case "In Progress":
+        return "purple";
+
+      case "Testing":
+        return "orange";
+
+      case "Ready for Test":
+        return "blue";
+
+      case "To Do":
+        return "red";
+
+      case "Backlog":
+        return "grey";
+
+      default:
+        return "grey";
+    }
+  }
+
+  onMounted(async () => {
+    try {
+      pageError.value = "";
+
+      await retrieveUserProjects();
+
+      if (!projectId.value) {
+        return;
+      }
+
+      await Promise.all([
+        retrieveStories(),
+        retrieveProjectMembers(),
+      
+      ]);
+    } catch (error) {
+      console.error(
+        "Failed to initialize backlog:",
+        error,
+      );
+
+      pageError.value =
+        error.response?.data?.message ||
+        error.message ||
+        "The backlog page could not be loaded.";
+    }
+  });
 </script>
 
 <style scoped>
