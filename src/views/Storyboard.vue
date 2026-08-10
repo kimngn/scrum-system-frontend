@@ -14,12 +14,20 @@
 
   // Columns shown when the user isn't assigned to a project so the storyboard has the error snackbar.
   const fallbackColumns = [
-    { id: 1, title: "Backlog" },
-    { id: 2, title: "To Do" },
-    { id: 3, title: "In Progress" },
-    { id: 4, title: "Ready for Test" },
-    { id: 5, title: "Testing" },
-    { id: 6, title: "Done" },
+    { id: 1, title: "Backlog", type: "Does nothing" },
+    { id: 2, title: "To Do", type: "Does nothing" },
+    { id: 3, title: "In Progress", type: "Creates a new branch" },
+    { id: 4, title: "Ready for Test", type: "Creates a new PR" },
+    { id: 5, title: "Testing", type: "Does nothing" },
+    { id: 6, title: "Done", type: "Does nothing" },
+  ];
+
+  // For column type dropdown
+  // types are currently hard coded instead of having an enum, will get to that later if there's enough time
+  const typeOptions = [
+    "Does nothing",
+    "Creates a new PR",
+    "Creates a new branch",
   ];
 
   const priorityOptions = ["Critical", "High", "Medium", "Low"];
@@ -51,8 +59,16 @@
   const canManageColumns = ref(false);
   const showColumnDialog = ref(false);
   const newColumnTitle = ref("");
+  const newColumnType = ref("Does nothing");
   const draggedColumn = ref(null);
   const hoverColumnRowId = ref(null);
+
+  // Snackbar
+  const snackbar = ref({
+    value: false,
+    color: "",
+    text: "",
+  });
 
   // Variables related to branch + pull requests
   const repos = ref([]);
@@ -264,6 +280,7 @@
       columnList.push({
         id: projectColumns.value[i].id,
         title: projectColumns.value[i].title,
+        type: projectColumns.value[i].type,
 
         // Starts columns with empty story list.
         stories: [],
@@ -366,8 +383,19 @@
     hoverColumnId.value = columnId;
   }
 
-  async function dropStory(columnId) {
+  async function dropStory(columnId, columnType) {
     hoverColumnId.value = null;
+    console.log("Dropped story");
+
+    if (columnType == "Do nothing") {
+      console.log("Do nothing!");
+    } else if (columnType == "Creates a new PR") {
+      console.log("Trigger PR creation for story:" + draggedStory.value.title);
+      await triggerPR();
+      console.log("PR created!");
+    } else if (columnType == "Creates a new branch") {
+      console.log("Branch created!");
+    }
 
     // If story is dropped in the same column do nothing.
     if (draggedStory.value.columnId === columnId) {
@@ -509,6 +537,7 @@
       title: newColumnTitle.value,
       displayOrder: projectColumns.value.length + 1,
       projectId: projectId.value,
+      type: newColumnType.value,
       role: user.value.role,
     });
 
