@@ -7,6 +7,7 @@ import ProjectMembershipServices from "../services/ProjectMembershipServices.js"
 import StoryAssigneeServices from "../services/StoryAssigneeServices.js";
 import ProjectColumnServices from "../services/ProjectColumnServices.js";
 import SprintServices from "../services/SprintServices.js";
+import ChatWidget from "../components/ChatWidget.vue";
 
 // Columns shown when the user isn't assigned to a project so the storyboard has the error snackbar.
 const fallbackColumns = [
@@ -818,6 +819,9 @@ async function dropColumn(targetColumn) {
     >
       You must be in a project before creating a user story.
     </v-snackbar>
+
+    <!-- Chatbot for asking questions about this project's stories and sprints. -->
+    <ChatWidget :project-id="projectId"></ChatWidget>
 
   </v-container>
 </template>
