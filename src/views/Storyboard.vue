@@ -1,111 +1,105 @@
 <script setup>
-  import { computed, onMounted, ref } from "vue";
-  import { useRouter } from "vue-router";
-  import StoryboardServices from "../services/StoryboardServices.js";
-  import ProjectServices from "../services/ProjectServices.js";
-  import ProjectMembershipServices from "../services/ProjectMembershipServices.js";
-  import StoryAssigneeServices from "../services/StoryAssigneeServices.js";
-  import ProjectColumnServices from "../services/ProjectColumnServices.js";
-  import SprintServices from "../services/SprintServices.js";
-  import GithubSection from "../components/GithubSection.vue";
-  import RepoServices from "../services/RepoServices.js";
-  import BranchServices from "../services/BranchServices.js";
 
-  // Columns shown when the user isn't assigned to a project so the storyboard has the error snackbar.
-  const fallbackColumns = [
-    { id: 1, title: "Backlog" },
-    { id: 2, title: "To Do" },
-    { id: 3, title: "In Progress" },
-    { id: 4, title: "Ready for Test" },
-    { id: 5, title: "Testing" },
-    { id: 6, title: "Done" },
-  ];
+import { computed, onMounted, ref } from "vue";
+import { useRouter } from "vue-router";
+import StoryboardServices from "../services/StoryboardServices.js";
+import ProjectServices from "../services/ProjectServices.js";
+import ProjectMembershipServices from "../services/ProjectMembershipServices.js";
+import StoryAssigneeServices from "../services/StoryAssigneeServices.js";
+import ProjectColumnServices from "../services/ProjectColumnServices.js";
+import SprintServices from "../services/SprintServices.js";
+import ChatWidget from "../components/ChatWidget.vue";
+import GithubSection from "../components/GithubSection.vue";
+import RepoServices from "../services/RepoServices.js";
+import BranchServices from "../services/BranchServices.js";
 
-  const priorityOptions = ["Critical", "High", "Medium", "Low"];
-  const router = useRouter();
-  const user = ref(null);
-  const userProjects = ref([]);
-  const projectId = ref(null);
-  const sprints = ref([]);
-  const selectedSprintId = ref(null);
-  const formSprintId = ref(null);
-  const stories = ref([]);
-  const columns = ref([]);
-  const draggedStory = ref(null);
-  const hoverColumnId = ref(null);
-  const storyPoints = [1, 2, 3, 5, 8, 13, 21, 34, 55, 89];
-  const showProjectError = ref(false);
-  const showDialog = ref(false);
-  const isEditing = ref(false);
-  const editingStoryId = ref(null);
-  const selectedColumnId = ref(null);
-  const formTitle = ref("");
-  const formDescription = ref("");
-  const formPriority = ref("Medium");
-  const formStoryPoint = ref(null);
-  const assigneeOptions = ref([]);
-  const formAssignee = ref([]);
-  const editingAssigneeIds = ref([]);
-  const projectColumns = ref([]);
-  const canManageColumns = ref(false);
-  const showColumnDialog = ref(false);
-  const newColumnTitle = ref("");
-  const draggedColumn = ref(null);
-  const hoverColumnRowId = ref(null);
+// Columns shown when the user isn't assigned to a project so the storyboard has the error snackbar.
+const fallbackColumns = [
+  { id: 1, title: "Backlog" },
+  { id: 2, title: "To Do" },
+  { id: 3, title: "In Progress" },
+  { id: 4, title: "Ready for Test" },
+  { id: 5, title: "Testing" },
+  { id: 6, title: "Done" },
+];
 
-  // Variables related to branch + pull requests
+const priorityOptions = ["Critical", "High", "Medium", "Low"];
+const router = useRouter();
+const user = ref(null);
+const userProjects = ref([]);
+const projectId = ref(null);
+const sprints = ref([]);
+const selectedSprintId = ref(null);
+const formSprintId = ref(null);
+const stories = ref([]);
+const columns = ref([]);
+const draggedStory = ref(null);
+const hoverColumnId = ref(null);
+const storyPoints = [1, 2, 3, 5, 8, 13, 21, 34, 55, 89,];
+const showProjectError = ref(false);
+const showDialog = ref(false);
+const isEditing = ref(false);
+const editingStoryId = ref(null);
+const selectedColumnId = ref(null);
+const formTitle = ref("");
+const formDescription = ref("");
+const formPriority = ref("Medium");
+const formStoryPoint = ref(null);
+const assigneeOptions = ref([]);
+const formAssignee = ref([]);
+const editingAssigneeIds = ref([]);
+const projectColumns = ref([]);
+const canManageColumns = ref(false);
+const showColumnDialog = ref(false);
+const newColumnTitle = ref("");
+const draggedColumn = ref(null);
+const hoverColumnRowId = ref(null);
+          
+          
+// Variables related to branch + pull requests
   const repos = ref([]);
   const branches = ref([]);
   const editingBranch = ref(null);
   const newBranch = ref(null);
-  // Sprint dropdown used to filter the board. Null shows every sprint.
-  const sprintFilterOptions = computed(() => {
-    const options = [{ title: "All Sprints", value: null }];
-    for (let i = 0; i < sprints.value.length; i++) {
-      options.push({
-        title: sprints.value[i].name,
-        value: sprints.value[i].id,
-      });
-    }
-    return options;
-  });
 
-  // Sprint dropdown used in the story form. Null means backlog.
-  const storySprintOptions = computed(() => {
-    const options = [{ title: "Backlog", value: null }];
-    for (let i = 0; i < sprints.value.length; i++) {
-      options.push({
-        title: sprints.value[i].name,
-        value: sprints.value[i].id,
-      });
-    }
-    return options;
-  });
+// Sprint dropdown used to filter the board. Null shows every sprint.
+const sprintFilterOptions = computed(() => {
+  const options = [{ title: "All Sprints", value: null }];
+  for (let i = 0; i < sprints.value.length; i++) {
+    options.push({ title: sprints.value[i].name, value: sprints.value[i].id });
+  }
+  return options;
+});
 
-  onMounted(async () => {
-    // Gets the logged in user from local storage.
-    user.value = JSON.parse(localStorage.getItem("user"));
-    if (!user.value) {
-      router.push({ name: "login" });
-      return;
-    }
-    canManageColumns.value =
-      user.value.role === "lead" || user.value.role === "admin";
+// Sprint dropdown used in the story form. Null means backlog.
+const storySprintOptions = computed(() => {
+  const options = [{ title: "Backlog", value: null }];
+  for (let i = 0; i < sprints.value.length; i++) {
+    options.push({ title: sprints.value[i].name, value: sprints.value[i].id });
+  }
+  return options;
+});
 
-    // Gets every project the user belongs to.
-    await ProjectServices.getProjectsByUserId(user.value.id)
-      .then((response) => {
-        userProjects.value = response.data;
+onMounted(async () => {
+  // Gets the logged in user from local storage.
+  user.value = JSON.parse(localStorage.getItem("user"));
+  if (!user.value) {
+    router.push({ name: "login" });
+    return;
+  }
+  canManageColumns.value = user.value.role === "lead" || user.value.role === "admin";
 
-        // Restores the last selected project, if it still belongs to the user.
-        const savedProjectId = Number(
-          localStorage.getItem("storyboardProjectId"),
-        );
-        let savedProjectStillExists = false;
-        for (let i = 0; i < userProjects.value.length; i++) {
-          if (userProjects.value[i].id === savedProjectId) {
-            savedProjectStillExists = true;
-          }
+  // Gets every project the user belongs to.
+  await ProjectServices.getProjectsByUserId(user.value.id)
+    .then((response) => {
+      userProjects.value = response.data;
+
+      // Restores the last selected project, if it still belongs to the user.
+      const savedProjectId = Number(localStorage.getItem("storyboardProjectId"));
+      let savedProjectStillExists = false;
+      for (let i = 0; i < userProjects.value.length; i++) {
+        if (userProjects.value[i].id === savedProjectId) {
+          savedProjectStillExists = true;
         }
 
         if (savedProjectStillExists) {
@@ -134,22 +128,66 @@
     await loadProjectData();
   });
 
-  // Loads everything to the selected project.
-  async function loadProjectData() {
-    // Gets the project's columns from the backend.
-    await getColumns();
-    // Gets the user assignees from the backend
-    await getAssignees();
-    // Gets the project's sprints from the backend.
-    await getSprints();
-    // Gets the stories from the backend.
-    await getStories();
+  // Restores the last selected sprint filter.
+  const savedSprintId = localStorage.getItem("storyboardSprintId");
+  selectedSprintId.value = savedSprintId ? Number(savedSprintId) : null;
+
+  await loadProjectData();
+});
+
+// Loads everything to the selected project.
+async function loadProjectData() {
+  // Gets the project's columns from the backend.
+  await getColumns();
+  // Gets the user assignees from the backend
+  await getAssignees();
+  // Gets the project's sprints from the backend.
+  await getSprints();
+  // Gets the stories from the backend.
+  await getStories();
+}
+
+// Runs when the user picks a changes the project.
+async function changeProject() {
+  // Remembers the selected project so refreshing doesn't reset it.
+  localStorage.setItem("storyboardProjectId", projectId.value);
+
+  selectedSprintId.value = null;
+  localStorage.removeItem("storyboardSprintId");
+
+  await loadProjectData();
+}
+
+// Get sprints for the sprint filter dropdown.
+async function getSprints() {
+  if (!projectId.value) {
+    sprints.value = [];
+    return;
   }
 
-  // Runs when the user picks a changes the project.
-  async function changeProject() {
-    // Remembers the selected project so refreshing doesn't reset it.
-    localStorage.setItem("storyboardProjectId", projectId.value);
+  await SprintServices.getSprintsByProjectId(projectId.value)
+    .then((response) => {
+      sprints.value = response.data;
+
+      // Clears the restored sprint filter if that sprint no longer exists.
+      if (selectedSprintId.value !== null) {
+        let sprintStillExists = false;
+        for (let i = 0; i < sprints.value.length; i++) {
+          if (sprints.value[i].id === selectedSprintId.value) {
+            sprintStillExists = true;
+          }
+        }
+
+        if (!sprintStillExists) {
+          selectedSprintId.value = null;
+          localStorage.removeItem("storyboardSprintId");
+        }
+      }
+    })
+    .catch((error) => {
+      console.log(error);
+    });
+}
 
     selectedSprintId.value = null;
     localStorage.removeItem("storyboardSprintId");
@@ -898,6 +936,10 @@
     >
       You must be in a project before creating a user story.
     </v-snackbar>
+
+    <!-- Chatbot for asking questions about this project's stories and sprints. -->
+    <ChatWidget :project-id="projectId"></ChatWidget>
+
   </v-container>
 </template>
 
