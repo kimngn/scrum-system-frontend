@@ -97,52 +97,58 @@
       .then((response) => {
         userProjects.value = response.data;
 
-        const savedProjectId = Number(
-          localStorage.getItem("storyboardProjectId"),
-        );
-        let savedProjectStillExists = false;
+  // Restores the last selected sprint filter.
+  const savedSprintId = localStorage.getItem("storyboardSprintId");
+  selectedSprintId.value = savedSprintId ? Number(savedSprintId) : null;
 
-        for (let i = 0; i < userProjects.value.length; i++) {
-          if (userProjects.value[i].id === savedProjectId) {
-            savedProjectStillExists = true;
-          }
-        }
+  await loadProjectData();
+});
 
-        if (savedProjectStillExists) {
-          projectId.value = savedProjectId;
-        } else if (userProjects.value.length > 0) {
-          projectId.value = userProjects.value[0].id;
-        }
-      })
-      .catch((error) => {
-        console.log(error);
-      });
+// Loads everything to the selected project.
+async function loadProjectData() {
+  // Gets the project's columns from the backend.
+  await getColumns();
+  // Gets the user assignees from the backend
+  await getAssignees();
+  // Gets the project's sprints from the backend.
+  await getSprints();
+  // Gets the stories from the backend.
+  await getStories();
+}
 
-    await RepoServices.getReposByProjectId(projectId.value)
-      .then((response) => {
-        repos.value = response.data;
-      })
-      .catch((error) => {
-        console.log(error);
-      });
+// Runs when the user picks a changes the project.
+async function changeProject() {
+  // Remembers the selected project so refreshing doesn't reset it.
+  localStorage.setItem("storyboardProjectId", projectId.value);
 
-    const savedSprintId = localStorage.getItem("storyboardSprintId");
-    selectedSprintId.value = savedSprintId ? Number(savedSprintId) : null;
+  selectedSprintId.value = null;
+  localStorage.removeItem("storyboardSprintId");
 
-    await loadProjectData();
-  });
+  await loadProjectData();
+}
 
-  // Loads everything to the selected project.
-  async function loadProjectData() {
-    // Gets the project's columns from the backend.
-    await getColumns();
-    // Gets the user assignees from the backend
-    await getAssignees();
-    // Gets the project's sprints from the backend.
-    await getSprints();
-    // Gets the stories from the backend.
-    await getStories();
+// Get sprints for the sprint filter dropdown.
+async function getSprints() {
+  if (!projectId.value) {
+    sprints.value = [];
+    return;
   }
+
+  await SprintServices.getSprintsByProjectId(projectId.value)
+    .then((response) => {
+      sprints.value = response.data;
+
+      // Reset the filter if the saved sprint no longer belongs to this project.
+      const ids = sprints.value.map((s) => s.id);
+      if (selectedSprintId.value !== null && !ids.includes(selectedSprintId.value)) {
+        selectedSprintId.value = null;
+        localStorage.removeItem("storyboardSprintId");
+      }
+    })
+    .catch((error) => {
+      console.log(error);
+    });
+}
 
   // Runs when the user picks a changes the project.
   async function changeProject() {
