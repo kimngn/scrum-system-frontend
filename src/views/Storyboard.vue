@@ -96,15 +96,44 @@
     await ProjectServices.getProjectsByUserId(user.value.id)
       .then((response) => {
         userProjects.value = response.data;
+        // Gets the last selected project.
+        const savedProjectId = Number(
+          localStorage.getItem("storyboardProjectId"),
+        );
+        let savedProjectStillExists = false;
+        // Checks if the saved project is still one of the user's projects.
+        for (let i = 0; i < userProjects.value.length; i++) {
+          if (userProjects.value[i].id === savedProjectId) {
+            savedProjectStillExists = true;
+          }
+        }
+        // Uses the saved project if it still exists.
+        if (savedProjectStillExists) {
+          projectId.value = savedProjectId;
+        } else if (userProjects.value.length > 0) {
+          projectId.value = userProjects.value[0].id;
+        }
+      })
+      .catch((error) => {
+        console.log(error);
+      });
+    // Gets the repos for the selected project.
+    await RepoServices.getReposByProjectId(projectId.value)
+      .then((response) => {
+        repos.value = response.data;
+      })
+      .catch((error) => {
+        console.log(error);
+      });
 
-  // Restores the last selected sprint filter.
-  const savedSprintId = localStorage.getItem("storyboardSprintId");
-  selectedSprintId.value = savedSprintId ? Number(savedSprintId) : null;
+    // Restores the last selected sprint filter.
+    const savedSprintId = localStorage.getItem("storyboardSprintId");
+    selectedSprintId.value = savedSprintId ? Number(savedSprintId) : null;
 
-  await loadProjectData();
-});
+    await loadProjectData();
+  });
 
-// Loads everything to the selected project.
+  // Loads everything to the selected project.
 async function loadProjectData() {
   // Gets the project's columns from the backend.
   await getColumns();
@@ -116,41 +145,7 @@ async function loadProjectData() {
   await getStories();
 }
 
-// Runs when the user picks a changes the project.
-async function changeProject() {
-  // Remembers the selected project so refreshing doesn't reset it.
-  localStorage.setItem("storyboardProjectId", projectId.value);
-
-  selectedSprintId.value = null;
-  localStorage.removeItem("storyboardSprintId");
-
-  await loadProjectData();
-}
-
-// Get sprints for the sprint filter dropdown.
-async function getSprints() {
-  if (!projectId.value) {
-    sprints.value = [];
-    return;
-  }
-
-  await SprintServices.getSprintsByProjectId(projectId.value)
-    .then((response) => {
-      sprints.value = response.data;
-
-      // Reset the filter if the saved sprint no longer belongs to this project.
-      const ids = sprints.value.map((s) => s.id);
-      if (selectedSprintId.value !== null && !ids.includes(selectedSprintId.value)) {
-        selectedSprintId.value = null;
-        localStorage.removeItem("storyboardSprintId");
-      }
-    })
-    .catch((error) => {
-      console.log(error);
-    });
-}
-
-  // Runs when the user picks a changes the project.
+  // Runs when the user picks a different project from the dropdown.
   async function changeProject() {
     // Remembers the selected project so refreshing doesn't reset it.
     localStorage.setItem("storyboardProjectId", projectId.value);
@@ -161,7 +156,7 @@ async function getSprints() {
     await loadProjectData();
   }
 
-  // Get sprints for the sprint filter dropdown.
+  // Gets the sprints for the project, for the sprint filter dropdown.
   async function getSprints() {
     if (!projectId.value) {
       sprints.value = [];
@@ -171,6 +166,19 @@ async function getSprints() {
     await SprintServices.getSprintsByProjectId(projectId.value)
       .then((response) => {
         sprints.value = response.data;
+
+        // Reset the filter if the saved sprint no longer belongs to this project.
+        let sprintStillExists = false;
+        for (let i = 0; i < sprints.value.length; i++) {
+          if (sprints.value[i].id === selectedSprintId.value) {
+            sprintStillExists = true;
+          }
+        }
+         // Clears the  filter if the sprint doesn't exist.
+        if (selectedSprintId.value !== null && !sprintStillExists) {
+          selectedSprintId.value = null;
+          localStorage.removeItem("storyboardSprintId");
+        }
       })
       .catch((error) => {
         console.log(error);
