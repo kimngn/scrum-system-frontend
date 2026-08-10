@@ -59,6 +59,13 @@
   const draggedColumn = ref(null);
   const hoverColumnRowId = ref(null);
 
+  // Snackbar
+  const snackbar = ref({
+    value: false,
+    color: "",
+    text: "",
+  });
+
   // Sprint dropdown used to filter the board. Null shows every sprint.
   const sprintFilterOptions = computed(() => {
     const options = [{ title: "All Sprints", value: null }];
@@ -355,6 +362,8 @@
     if (columnType == "Do nothing") {
       console.log("Do nothing!");
     } else if (columnType == "Creates a new PR") {
+      console.log("Trigger PR creation for story:" + draggedStory.value.title);
+      await triggerPR();
       console.log("PR created!");
     } else if (columnType == "Creates a new branch") {
       console.log("Branch created!");
@@ -518,6 +527,20 @@
 
     draggedColumn.value = null;
     await getColumns();
+  }
+
+  // Trigger PR creation
+  async function triggerPR() {
+    try {
+      let pr = {
+        head: "...", // branch with changes
+        base: "...", // branch that the head is being merged into
+      };
+
+      StoryboardServices.triggerPR(draggedStory.value, pr);
+    } catch (error) {
+      console.log(error);
+    }
   }
 </script>
 

@@ -216,7 +216,7 @@
       } catch (error) {
         console.log(error);
         snackbar.value.value = true;
-        snackbar.value.color = "error";
+        bar.value.color = "error";
         snackbar.value.text = error.response?.data?.message || error.message;
         hasError = true;
         return;
