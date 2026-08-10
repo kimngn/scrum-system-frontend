@@ -79,7 +79,10 @@ const projectInitials = computed(() => {
 });
 
 function getInitials(u) {
-  return (u.firstName[0] + u.lastName[0]).toUpperCase();
+  if (!u) return "?";
+  const first = u.firstName?.[0] ?? "";
+  const last = u.lastName?.[0] ?? "";
+  return (first + last).toUpperCase() || "?";
 }
 
 function formatDate(date) {
@@ -273,8 +276,10 @@ function sprintStatusLabel(status) {
 }
 
 const sprintStatusError = ref("");
+const duplicatingFrom = ref(null);
 
 function openSprintDialog(sprint) {
+  duplicatingFrom.value = null;
   if (sprint) {
     sprintForm.value = {
       id: sprint.id,
@@ -331,6 +336,10 @@ async function saveSprint() {
   try {
     if (sprintForm.value.id) {
       await SprintServices.updateSprint(sprintForm.value.id, payload);
+    } else if (duplicatingFrom.value) {
+      const sourceId = duplicatingFrom.value.id;
+      duplicatingFrom.value = null;
+      await SprintServices.duplicateSprint(sourceId, payload);
     } else {
       await SprintServices.addSprint(payload);
     }
@@ -343,6 +352,35 @@ async function saveSprint() {
       sprintFormError.value = "Failed to save sprint.";
     }
   }
+}
+
+function duplicateSprint(sprint) {
+  const originalStart = sprint.startDate ? new Date(sprint.startDate) : new Date();
+  const originalEnd = sprint.endDate ? new Date(sprint.endDate) : new Date();
+  const durationMs = originalEnd - originalStart;
+
+  const newStart = new Date();
+  newStart.setHours(0, 0, 0, 0);
+  const newEnd = new Date(newStart.getTime() + durationMs);
+
+  const toDateStr = (d) => d.toISOString().split("T")[0];
+
+  duplicatingFrom.value = sprint;
+  sprintForm.value = {
+    id: null,
+    name: sprint.name + " (Copy)",
+    startDate: toDateStr(newStart),
+    endDate: toDateStr(newEnd),
+    status: "planned",
+  };
+  sprintFormError.value = "";
+  sprintDialog.value = true;
+}
+
+function closeSprintDialog() {
+  duplicatingFrom.value = null;
+  sprintFormError.value = "";
+  sprintDialog.value = false;
 }
 
 async function deleteSprint(id) {
@@ -475,10 +513,10 @@ onMounted(async () => {
                 </v-avatar>
                 <div>
                   <div class="font-weight-bold">
-                    {{ m.user.firstName }} {{ m.user.lastName }}
+                    {{ m.user?.firstName }} {{ m.user?.lastName }}
                   </div>
                   <div class="text-caption text-grey-darken-1">
-                    {{ m.user.email }} · {{ m.role }}
+                    {{ m.user?.email }} · {{ m.role }}
                   </div>
                 </div>
               </v-card>
@@ -534,6 +572,9 @@ onMounted(async () => {
                   <v-list>
                     <v-list-item @click="openSprintDialog(s)">
                       <v-list-item-title>Edit</v-list-item-title>
+                    </v-list-item>
+                    <v-list-item @click="duplicateSprint(s)">
+                      <v-list-item-title>Duplicate</v-list-item-title>
                     </v-list-item>
                     <v-list-item
                       v-if="s.status !== 'active'"
@@ -784,9 +825,9 @@ onMounted(async () => {
         class="d-flex justify-space-between align-center px-4 pt-4 pb-2"
       >
         <span class="text-h6 font-weight-bold">
-          {{ sprintForm.id ? "Edit Sprint" : "New Sprint" }}
+          {{ sprintForm.id ? "Edit Sprint" : (duplicatingFrom ? "Duplicate Sprint" : "New Sprint") }}
         </span>
-        <v-btn icon variant="text" @click="sprintDialog = false">
+        <v-btn icon variant="text" @click="closeSprintDialog">
           <v-icon>mdi-close</v-icon>
         </v-btn>
       </v-card-title>
@@ -802,6 +843,16 @@ onMounted(async () => {
           @click:close="sprintFormError = ''"
         >
           {{ sprintFormError }}
+        </v-alert>
+
+        <v-alert
+          v-if="duplicatingFrom"
+          type="info"
+          variant="tonal"
+          density="compact"
+          class="mb-3"
+        >
+          Creating the next sprint from <strong>{{ duplicatingFrom.name }}</strong>. Open stories will move over automatically.
         </v-alert>
 
         <div class="subheader mb-1">SPRINT NAME</div>
@@ -866,7 +917,7 @@ onMounted(async () => {
       </v-card-text>
 
       <v-card-actions class="px-4 pb-4 justify-end">
-        <v-btn variant="text" @click="sprintDialog = false">Cancel</v-btn>
+        <v-btn variant="text" @click="closeSprintDialog">Cancel</v-btn>
         <v-btn
           color="primary"
           variant="flat"
@@ -878,7 +929,6 @@ onMounted(async () => {
       </v-card-actions>
     </v-card>
   </v-dialog>
-
 
   </v-container>
 </template>

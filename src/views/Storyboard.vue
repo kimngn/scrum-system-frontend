@@ -142,6 +142,13 @@ async function getSprints() {
   await SprintServices.getSprintsByProjectId(projectId.value)
     .then((response) => {
       sprints.value = response.data;
+
+      // Reset the filter if the saved sprint no longer belongs to this project.
+      const ids = sprints.value.map((s) => s.id);
+      if (selectedSprintId.value !== null && !ids.includes(selectedSprintId.value)) {
+        selectedSprintId.value = null;
+        localStorage.removeItem("storyboardSprintId");
+      }
     })
     .catch((error) => {
       console.log(error);
