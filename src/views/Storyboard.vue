@@ -77,6 +77,9 @@
   const triggerBranchPopup = ref(false);
   const newBranchTitle = ref("");
   const newBranchRepo = ref("");
+  const draggedBranch = ref(""); // the branch of a dragged story
+  const draggedStoryId = ref(null); // grab draggedStoryId before it gets reset on endDrag()
+  const newBranchColumnId = ref(null); // grab columnId before it gets reset on endDrag()
 
   // Sprint dropdown used to filter the board. Null shows every sprint.
   const sprintFilterOptions = computed(() => {
@@ -370,14 +373,31 @@
   }
 
   // Save story being dragged.
-  function startDrag(story) {
+  async function startDrag(story) {
     draggedStory.value = story;
+
+    // get the branch associated with currently dragged story
+    try {
+      const response = await BranchServices.getBranchByStoryId(
+        draggedStory.value.id,
+      );
+      draggedBranch.value = response.data || null; // turn undefined into null
+      console.log("Dragged branch: " + draggedBranch.value.id);
+    } catch (error) {
+      console.log(error);
+    }
   }
 
   // Clears drag values.
   function endDrag() {
+    draggedStoryId.value = draggedStory.value.id;
+    newBranchColumnId.value = draggedStory.value.columnId;
+    console.log("Column ID:" + newBranchColumnId.value);
+
     draggedStory.value = null;
     hoverColumnId.value = null;
+
+    console.log("END DRAG");
   }
 
   // Outlines the column being dragged over.
@@ -386,23 +406,22 @@
   }
 
   async function dropStory(columnId, columnType) {
-    hoverColumnId.value = null;
     console.log("Dropped story");
 
     if (columnType == "Do nothing") {
       console.log("Do nothing!");
     } else if (columnType == "Creates a new PR") {
       console.log("Trigger PR creation for story:" + draggedStory.value.title);
-
       await triggerPR();
       console.log("PR created!");
     } else if (columnType == "Creates a new branch") {
+      // need to figure out if story already has a branch
       await triggerBranch();
-
-      triggerBranchPopup.value = true;
 
       console.log("Branch created!");
     }
+
+    hoverColumnId.value = null;
 
     // If story is dropped in the same column do nothing.
     if (draggedStory.value.columnId === columnId) {
@@ -466,27 +485,56 @@
 
     var branch = null;
     editingStoryId.value = storyId;
+
+    if (repos.value.length == 1) {
+      newBranchRepo.value = repos.value[0];
+    }
     // better fix may be to just allow these fields to be nullable in the model
     if (!editingBranch) {
       // user left dropdown blank
-    } else if (isEditing.value && editingBranch.dbBranch?.id) // for Edit dialog
-    {
+    } else if (isEditing.value && editingBranch.dbBranch?.id) {
+      // for Edit dialog
+      try {
+        const response = await BranchServices.getShaAndDefaultBranch(
+          newBranchRepo.value,
+        );
+        console.log("SHA:" + response.data);
+        var sha = response.data.sha;
+        var ref = response.data.ref; // not needed for creation, but for updates/deletions
+      } catch (error) {
+        console.log("Error:" + error);
+      }
       branch = {
         id: editingBranch.dbBranch.id,
         title: editingBranch.name,
         storyId: editingBranch.dbBranch.storyId,
         repoId: editingBranch.dbBranch.repoId,
         columnId: editingBranch.dbBranch.columnId,
+        sha: sha,
+        ref: ref,
       };
       await BranchServices.updateBranch(branch);
       console.log("Branch updated");
     } else {
       // for Create dialog
+
+      try {
+        const response = await BranchServices.getShaAndDefaultBranch(
+          newBranchRepo.value,
+        );
+        console.log("SHA:" + response.data);
+        var sha = response.data.sha;
+        var ref = response.data.ref; // not needed for creation, but for updates/deletions
+      } catch (error) {
+        console.log("Error:" + error);
+      }
       branch = {
         title: editingBranch.name,
         userStoryId: storyId,
         repoId: editingBranch.repoId,
         columnId: selectedColumnId.value,
+        sha: sha,
+        ref: ref,
       };
       console.log("Sending branch:", branch);
       try {
@@ -613,8 +661,74 @@
   }
 
   function triggerBranch() {
-    // BranchServices.getShaFromMain(repo);
+    if (!draggedBranch.value.id) {
+      // new branch pop up appears if the story doesn't have a branch
+      triggerBranchPopup.value = true;
+    }
+
     console.log("GithubAPI branch creation!");
+  }
+
+  async function createBranch() {
+    // just get the first repo in repos
+    if (repos.value.length == 1) {
+      newBranchRepo.value = repos.value[0];
+    }
+
+    console.log(
+      "Created branch in" +
+        newBranchRepo.value.name +
+        " titled " +
+        newBranchTitle.value,
+    );
+
+    // send to database
+
+    // get sha of main branch (need it for later for PRs)
+    try {
+      const response = await BranchServices.getShaAndDefaultBranch(
+        newBranchRepo.value,
+      );
+      console.log("SHA:" + response.data);
+      var sha = response.data.sha;
+      var ref = response.data.ref; // not needed for creation, but for updates/deletions
+    } catch (error) {
+      console.log("Error:" + error);
+    }
+
+    console.log("CREATE BRANCH COLUMN ID" + newBranchColumnId.value);
+    var branch = {
+      title: newBranchTitle.value,
+      userStoryId: draggedStoryId.value,
+      repoId: newBranchRepo.value.id,
+      columnId: newBranchColumnId.value,
+      sha: sha,
+      ref: ref,
+    };
+
+    console.log("Sending branch:", branch);
+    try {
+      await BranchServices.addBranch(branch);
+    } catch (error) {
+      if (error.response) {
+        console.error("Error response:", error.response.data);
+      } else {
+        console.error("Error:", error.message);
+      }
+    }
+    console.log("Branch created in database");
+
+    // send to Github
+    try {
+      await BranchServices.postBranchToGitHub(newBranchRepo.value, branch, sha);
+    } catch (error) {
+      if (error.response) {
+        console.error("Error response:", error.response.data);
+      } else {
+        console.error("Error:", error.message);
+      }
+    }
+    console.log("Branch created in Github");
   }
 </script>
 
@@ -969,30 +1083,37 @@
         <v-card-text>
           <div class="d-flex align-center">
             <v-col>
+              <div class="form-label mb-5">Branch title:</div>
               <v-row class="mb-2">
                 <v-text-field
                   v-model="newBranchTitle"
                   density="compact"
-                  placeholder="firstName-branch-title"
+                  placeholder="user-branch-title"
                   hide-details
                 ></v-text-field>
               </v-row>
-              <v-row>
-                <v-select
-                  v-if="repos.length > 1"
-                  v-model="newBranchRepo"
-                  :items="repos"
-                  placeholder="Select a repository"
-                  density="compact"
-                  item-title="name"
-                  return-object
-                />
-              </v-row>
+
+              <div v-if="repos.length > 1">
+                <div class="form-label mb-5 mt-6">
+                  Repository to create branch in:
+                </div>
+
+                <v-row>
+                  <v-select
+                    v-model="newBranchRepo"
+                    :items="repos"
+                    placeholder="Select a repository"
+                    density="compact"
+                    item-title="name"
+                    return-object
+                  />
+                </v-row>
+              </div>
 
               <v-row>
                 <button
-                  @click.stop="FunctionThatCallsCreateBranchAndPostsBranch"
-                  class="createButtonStyle"
+                  @click.stop="createBranch()"
+                  class="createButtonStyle mt-3"
                 >
                   Create
                 </button>
