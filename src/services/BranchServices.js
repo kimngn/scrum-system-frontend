@@ -20,6 +20,13 @@ export default {
     });
   },
 
+  getShaFromMain(repo) {
+    return apiClient.post("/api/github/main", {
+      repoUrl: repo.repoUrl,
+      token: repo.token,
+    });
+  },
+
   updateBranch(branch) {
     return apiClient.put("branches/" + branch.id, branch);
   },

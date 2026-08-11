@@ -74,7 +74,9 @@
   const repos = ref([]);
   const branches = ref([]);
   const editingBranch = ref(null);
-  const newBranch = ref(null);
+  const triggerBranchPopup = ref(false);
+  const newBranchTitle = ref("");
+  const newBranchRepo = ref("");
 
   // Sprint dropdown used to filter the board. Null shows every sprint.
   const sprintFilterOptions = computed(() => {
@@ -391,9 +393,14 @@
       console.log("Do nothing!");
     } else if (columnType == "Creates a new PR") {
       console.log("Trigger PR creation for story:" + draggedStory.value.title);
+
       await triggerPR();
       console.log("PR created!");
     } else if (columnType == "Creates a new branch") {
+      await triggerBranch();
+
+      triggerBranchPopup.value = true;
+
       console.log("Branch created!");
     }
 
@@ -424,6 +431,7 @@
 
     draggedStory.value = null;
   }
+
   async function saveStory(editingBranch) {
     // Title can't be empty.
     if (formTitle.value === "") {
@@ -598,6 +606,15 @@
   function onBranchUpdate(newBranch) {
     // from newBranch
     editingBranch.value = newBranch;
+  }
+
+  function triggerPR() {
+    console.log("GithubAPI PR creation!");
+  }
+
+  function triggerBranch() {
+    // BranchServices.getShaFromMain(repo);
+    console.log("GithubAPI branch creation!");
   }
 </script>
 
@@ -945,6 +962,47 @@
       </v-card>
     </v-dialog>
 
+    <v-dialog v-model="triggerBranchPopup" width="500">
+      <v-card>
+        <v-card-title>Create new Github branch</v-card-title>
+
+        <v-card-text>
+          <div class="d-flex align-center">
+            <v-col>
+              <v-row class="mb-2">
+                <v-text-field
+                  v-model="newBranchTitle"
+                  density="compact"
+                  placeholder="firstName-branch-title"
+                  hide-details
+                ></v-text-field>
+              </v-row>
+              <v-row>
+                <v-select
+                  v-if="repos.length > 1"
+                  v-model="newBranchRepo"
+                  :items="repos"
+                  placeholder="Select a repository"
+                  density="compact"
+                  item-title="name"
+                  return-object
+                />
+              </v-row>
+
+              <v-row>
+                <button
+                  @click.stop="FunctionThatCallsCreateBranchAndPostsBranch"
+                  class="createButtonStyle"
+                >
+                  Create
+                </button>
+              </v-row>
+            </v-col>
+          </div>
+        </v-card-text>
+      </v-card>
+    </v-dialog>
+
     <!-- Error snackbar for project errors. -->
     <v-snackbar
       v-model="showProjectError"
@@ -1012,5 +1070,17 @@
   }
   .story-dialog-card {
     transform: translateY(-20px);
+  }
+
+  .createButtonStyle {
+    background-color: rgb(26, 161, 146);
+    border-width: 2px;
+    border-color: black; /* why is there no outline? */
+    color: white;
+    padding: 5px 5px;
+    width: 100px;
+    text-align: center;
+    display: inline-block;
+    border-radius: 6%;
   }
 </style>
