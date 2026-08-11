@@ -30,17 +30,20 @@
   });
 
   onMounted(async () => {
-    await getUsers();
-    console.log("USERS:", users.value);
-    console.log("USERS: " + users.value[0]);
     loggedInUser.value = JSON.parse(localStorage.getItem("user"));
+    await getUsers();
 
+    console.log("USERS:", users.value);
     console.log("Roles at setup:", roles.value);
   });
 
   async function getUsers() {
     console.log("getUsers called");
-    await UserServices.getUsers()
+    const call =
+      loggedInUser.value?.role === "admin"
+        ? UserServices.getUsers()
+        : UserServices.getRelatedUsers(loggedInUser.value?.id);
+    await call
       .then((response) => {
         users.value = response.data;
       })
@@ -48,7 +51,7 @@
         console.log(error);
         snackbar.value.value = true;
         snackbar.value.color = "error";
-        snackbar.value.text = error.response.data.message;
+        snackbar.value.text = error.response?.data?.message;
       });
   }
 
