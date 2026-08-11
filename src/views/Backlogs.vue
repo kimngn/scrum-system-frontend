@@ -369,13 +369,18 @@
               />
 
               <!-- Description -->
-              <v-textarea
-                v-model="storyEdit.description"
-                label="Description"
-                variant="outlined"
-                rows="4"
-                auto-grow
-              />
+                <v-textarea
+                  v-model="storyEdit.description"
+                  label="Description"
+                  variant="outlined"
+                  rows="4"
+                  auto-grow
+                />
+
+                <AcceptanceCriteria
+                  v-if="selectedStory?.id"
+                  :story-id="selectedStory.id"
+                />
             </v-col>
 
             <!-- RIGHT SIDE -->
@@ -484,6 +489,7 @@
   import ProjectMembershipServices from "../services/ProjectMembershipServices.js";
   import ProjectColumnServices from "../services/ProjectColumnServices.js";
   import SprintServices from "../services/SprintServices.js";
+  import AcceptanceCriteria from "../components/AcceptanceCriteria.vue";
 
 
   const user = ref(
