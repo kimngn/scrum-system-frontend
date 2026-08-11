@@ -9,6 +9,7 @@
   import SprintServices from "../services/SprintServices.js";
   import ChatWidget from "../components/ChatWidget.vue";
   import GithubSection from "../components/GithubSection.vue";
+  import AcceptanceCriteria from "../components/AcceptanceCriteria.vue";
   import RepoServices from "../services/RepoServices.js";
   import BranchServices from "../services/BranchServices.js";
 
@@ -983,6 +984,13 @@
             </v-col>
           </v-row>
 
+          <!-- Acceptance criteria, only once the story actually exists. -->
+          <v-row v-if="isEditing" class="mb-5">
+            <v-col cols="12">
+              <AcceptanceCriteria :story-id="editingStoryId" />
+            </v-col>
+          </v-row>
+
           <!-- Shows assignees email under name -->
           <v-select
             v-model="formAssignee"
@@ -1001,11 +1009,12 @@
           </v-select>
         </v-card-text>
         <!-- If a user clicks edit show delete/save button. -->
-        <v-card-actions>
+        <v-card-actions class="pa-4">
           <v-btn
             v-if="isEditing"
             color="red"
             variant="text"
+            size="large"
             @click="deleteStory()"
           >
             Delete
@@ -1013,7 +1022,7 @@
           <!-- Spacing for save button. -->
           <v-spacer></v-spacer>
 
-          <v-btn color="green" variant="text" @click="saveStory(editingBranch)">
+          <v-btn color="green" variant="text" size="large" @click="saveStory(editingBranch)">
             Save
           </v-btn>
         </v-card-actions>
