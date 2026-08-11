@@ -80,6 +80,8 @@
   const draggedBranch = ref(""); // the branch of a dragged story
   const draggedStoryId = ref(null); // grab draggedStoryId before it gets reset on endDrag()
   const newBranchColumnId = ref(null); // grab columnId before it gets reset on endDrag()
+  const showColumnError = ref(false);
+  const showPostBranchSuccess = ref(false);
 
   // Sprint dropdown used to filter the board. Null shows every sprint.
   const sprintFilterOptions = computed(() => {
@@ -164,6 +166,8 @@
     await getSprints();
     // Gets the stories from the backend.
     await getStories();
+    // Gets the repos from the backend.
+    await RepoServices.getReposByProjectId(projectId.value);
   }
 
   // Runs when the user picks a different project from the dropdown.
@@ -374,6 +378,7 @@
 
   // Save story being dragged.
   async function startDrag(story) {
+    showPostBranchSuccess.value = false;
     draggedStory.value = story;
 
     // get the branch associated with currently dragged story
@@ -589,6 +594,15 @@
       return;
     }
 
+    if (
+      (repos.value.length == 0 &&
+        newColumnType.value === "Creates a new branch") ||
+      (repos.value.length == 0 && newColumnType.value === "Creates a new PR")
+    ) {
+      showColumnError.value = true;
+      return;
+    }
+
     await ProjectColumnServices.addColumn({
       title: newColumnTitle.value,
       displayOrder: projectColumns.value.length + 1,
@@ -598,6 +612,7 @@
     });
 
     newColumnTitle.value = "";
+    newColumnType.value = "Does nothing";
     await getColumns();
   }
 
@@ -683,7 +698,6 @@
     );
 
     // send to database
-
     // get sha of main branch (need it for later for PRs)
     try {
       const response = await BranchServices.getShaAndDefaultBranch(
@@ -706,7 +720,6 @@
       ref: ref,
     };
 
-    console.log("Sending branch:", branch);
     try {
       await BranchServices.addBranch(branch);
     } catch (error) {
@@ -721,6 +734,7 @@
     // send to Github
     try {
       await BranchServices.postBranchToGitHub(newBranchRepo.value, branch, sha);
+      showPostBranchSuccess.value = true;
     } catch (error) {
       if (error.response) {
         console.error("Error response:", error.response.data);
@@ -729,6 +743,8 @@
       }
     }
     console.log("Branch created in Github");
+    newBranchTitle.value = "";
+    triggerBranchPopup.value = false;
   }
 </script>
 
@@ -782,7 +798,13 @@
         v-if="canManageColumns"
         color="primary"
         variant="outlined"
-        @click="showColumnDialog = true"
+        @click="
+          () => {
+            // asked AI for help on how to get two variable assignments in a single click
+            showColumnDialog = true; // open columnDialog
+            showColumnError = false; // reset error
+          }
+        "
       >
         Manage Columns
       </v-btn>
@@ -1035,9 +1057,11 @@
           </div>
 
           <div class="newColumn rounded=lg mt-7">
-            <div class="form-label">
+            <!--  <div v-if="repos.length === 0"> -->
+            <p class="form-label">
               When user story items are dropped into this column, GitHub...
-            </div>
+            </p>
+
             <div class="d-flex align-center">
               <v-select
                 v-model="newColumnType"
@@ -1047,6 +1071,7 @@
               >
               </v-select>
             </div>
+            <!--   </div> -->
 
             <!-- Adds a new column at the end. -->
             <div class="d-flex align-center mt-4">
@@ -1134,6 +1159,24 @@
       You must be in a project before creating a user story.
     </v-snackbar>
 
+    <v-snackbar
+      v-model="showColumnError"
+      location="bottom"
+      timeout="3000"
+      color="red"
+    >
+      You must have a repository connected to this project in order to use this
+      column type.
+    </v-snackbar>
+
+    <v-snackbar
+      v-model="showPostBranchSuccess"
+      location="bottom"
+      timeout="3000"
+      color="green"
+    >
+      A new branch has been created on Github!
+    </v-snackbar>
     <!-- Chatbot for asking questions about this project's stories and sprints. -->
     <ChatWidget :project-id="projectId"></ChatWidget>
   </v-container>
