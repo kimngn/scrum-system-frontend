@@ -99,6 +99,7 @@
           id: m.id,
           user: m.user,
           role: m.role,
+          originalRole: m.role, // Store original role to detect changes
           isNew: false,
         }),
       );
@@ -130,10 +131,10 @@
   async function recordAction() {
     await HistoryServices.addHistory(newAction.value)
       .then(() => {
-        console.log("Action recorded!");
+        // Action recorded
       })
       .catch((error) => {
-        console.log("Failed to record action! Error: " + error.message);
+        // Error handling
       });
   }
 
@@ -167,7 +168,7 @@
         project.value = response.data;
       })
       .catch((error) => {
-        console.log(error);
+        // Error handling
       });
   }
 
@@ -177,7 +178,7 @@
         repos.value = response.data;
       })
       .catch((error) => {
-        console.log(error);
+        // Error handling
       });
   }
 
@@ -190,17 +191,12 @@
       showSnackbar("error", "End date must be after start date.");
       return;
     }
-    // call updateRepo, addRepo, and updateProject all at once when Save Changes button is clicked
-    console.log("New project:" + newProject.value.id);
-    let hasError = false; // false by default, if errors are found along the way, toggled to true
+    let hasError = false;
 
     const projectId = newProject.value.id;
 
     try {
-      console.log("Repos length:" + repos.value.length);
-
       for (const repo of repos.value) {
-        // check repo URL format
         const match = repo.repoUrl.match(
           /^https:\/\/github\.com\/([^\/]+)\/([^\/]+)$/,
         );
@@ -212,17 +208,12 @@
           break;
         }
 
-        // update and validate Repo if URL format is correct
         await updateRepo(repo);
-
-        console.log("Update repo success!");
       }
 
-      // addRepo if updating repo is successful
       try {
         await addRepo(newProject.value);
       } catch (error) {
-        console.log(error);
         snackbar.value.value = true;
         bar.value.color = "error";
         snackbar.value.text = error.response?.data?.message || error.message;
@@ -232,42 +223,42 @@
       // updateProject if updating and adding repo is successful
 
       await updateProject();
-      console.log("Update project success!");
 
       // update memberships
       for (const id of removedMembershipIds.value) {
         await ProjectMembershipServices.deleteMembership(id);
       }
-      for (const m of editingMembers.value.filter((m) => m.isNew)) {
-        await ProjectMembershipServices.addMembership({
-          userId: m.user.id,
-          projectId,
-          role: m.role,
-        });
+      for (const m of editingMembers.value) {
+        if (m.isNew) {
+          await ProjectMembershipServices.addMembership({
+            userId: m.user.id,
+            projectId,
+            role: m.role,
+          });
+        } else if (m.role !== m.originalRole) {
+          // Update existing membership if role changed
+          await ProjectMembershipServices.updateMembership(m.id, { role: m.role });
+        }
       }
       removedMembershipIds.value = [];
     } catch (error) {
-      console.log(error);
       snackbar.value.value = true;
       snackbar.value.color = "error";
       snackbar.value.text = error?.response?.data.message;
       hasError = true;
     }
 
-    newRepoInput.value = ""; // reset input
-    isAddRepo.value = false; // turn textfield back into the "Add" icon
+    newRepoInput.value = "";
+    isAddRepo.value = false;
     isEdit.value = hasError;
 
-    // no errors = no need to keep the dialog open
     if (!hasError) {
-      // no errors so display success message
       snackbar.value.value = true;
       snackbar.value.color = "green";
       snackbar.value.text =
         "Project and associated repo(s) have been modified.";
 
-      console.log("Project Repos:" + repos.value[0]);
-      const response = await RepoServices.getReposByProjectId(projectId); // refresh repos
+      const response = await RepoServices.getReposByProjectId(projectId);
       repos.value = response.data;
     }
 
@@ -278,19 +269,15 @@
 
   // DELETE PROJECT
   async function deleteProject(projectId, projectName) {
-    newAction.value.entityId = projectId; // grab this before project gets deleted
-    newAction.value.entityName = projectName; // grab this before project gets deleted
+    newAction.value.entityId = projectId;
+    newAction.value.entityName = projectName;
     await ProjectServices.deleteProject(projectId)
       .then(() => {
         showSnackbar("green", "Project deleted successfully!");
 
-        console.log("Project deleted");
-
         newAction.value.action = "delete";
         newAction.value.userId = user.value.id;
         newAction.value.entityType = "project";
-
-        console.log("Record action!");
 
         recordAction();
       })
@@ -336,28 +323,24 @@
         isEdit.value = false; // close editing dialog
       })
       .catch((error) => {
-        console.log(error);
-        isEdit.value = true; // close editing dialog
+        // Error handling
+        isEdit.value = true;
       });
   }
 
   // ADD REPO
   async function addRepo(project) {
     if (newRepoInput.value) {
-      // extract repoName from the URL
       const urlParts = newRepoInput.value.split("/");
-      const repoName = urlParts[urlParts.length - 1]; // repoName is at index 4
-      console.log(repoName);
+      const repoName = urlParts[urlParts.length - 1];
 
-      // fill in newRepo
       newRepo.value.name = repoName;
       newRepo.value.repoUrl = newRepoInput.value;
       newRepo.value.projectId = project.id;
       newRepo.value.token = newRepoTokenInput.value;
-      // check for correct URL format
       const match = newRepo.value.repoUrl.match(
         /^https:\/\/github\.com\/([^\/]+)\/([^\/]+)$/,
-      ); // returns boolean
+      );
 
       if (!match) {
         throw new Error("Invalid GitHub URL format");
@@ -377,8 +360,6 @@
         newAction.value.entityType = "repo";
 
         recordAction();
-
-        // find project associated with projectId
       } catch (error) {
         throw error; // keep original backend error
       }
@@ -387,12 +368,8 @@
 
   // UPDATE REPO
   async function updateRepo(repo) {
-    // extract repoName from the URL
     const urlParts = repo.repoUrl.split("/");
-    const repoName = urlParts[urlParts.length - 1]; // repoName is at index 4
-    console.log(repoName);
-
-    // fill in repo being modified
+    const repoName = urlParts[urlParts.length - 1];
 
     repo.id = repo.id;
     repo.name = repoName;
@@ -400,10 +377,9 @@
 
     await RepoServices.updateRepo(repo.id, repo)
       .then(() => {
-        console.log("Updated repository");
+        // Repository updated
       })
       .catch((error) => {
-        console.log("Failed to update repo");
         throw error;
       });
   }
@@ -451,7 +427,7 @@
   >
     <v-card-title class="headline">
       <v-row align="center">
-        <v-col cols="10">
+        <v-col cols="12">
           {{ project.name }}
           <v-chip class="ma-2" color="blue" label>
             <v-icon start icon="mdi-account-circle"></v-icon>
@@ -520,7 +496,7 @@
               Delete
             </button>
           </v-col>
-          <v-col v-if="user && user.role !== 'member'" cols="auto">
+          <v-col v-if="user && (user.role !== 'member' && project.userRole !== 'member')" cols="auto">
             <v-btn
               color="primary"
               @click.stop="

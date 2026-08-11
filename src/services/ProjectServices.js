@@ -1,11 +1,11 @@
 import apiClient from "./services";
 
 export default {
-  getProjects() {
-    return apiClient.get("projects");
+  getProjects(params) {
+    return apiClient.get("projects", { params });
   },
-  getProjectsByUserId(userId) {
-    return apiClient.get("projects/user/" + userId);
+  getProjectsByUserId(userId, params) {
+    return apiClient.get("projects/user/" + userId, { params });
   },
   getProject(id) {
     return apiClient.get("projects/" + id);

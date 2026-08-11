@@ -292,7 +292,7 @@ function closeSnackBar() {
 </script>
 
 <template>
-  <v-container>
+  <v-container fluid>
     <v-row align="center">
       <v-col cols="10"
         ><v-card-title class="pl-0 text-h4 font-weight-bold"

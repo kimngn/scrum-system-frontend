@@ -631,7 +631,6 @@
   const sprint = sprints.value.find(
     (sprint) => sprint.id === Number(sprintId)
   );
-  //console.log("sprint", sprints)
   return sprint?.name || "Backlog";
 }
 
@@ -715,10 +714,13 @@
     try {
       loadingProjects.value = true;
 
-      const response =
-        await ProjectServices.getProjectsByUserId(
-          user.value.id,
-        );
+      // Admins see all projects, members/leads see only assigned projects
+      const projectCall =
+        user.value.role === "admin"
+          ? ProjectServices.getProjects()
+          : ProjectServices.getProjectsByUserId(user.value.id);
+
+      const response = await projectCall;
 
       userProjects.value =
         Array.isArray(response.data)
@@ -781,8 +783,6 @@
       Array.isArray(response.data)
         ? response.data
         : [];
-
-    console.log("Sprints value:", sprints.value);
   } catch (error) {
     console.error(
       "Failed to retrieve sprints:",
@@ -878,13 +878,7 @@
             fullName:
               `${membership.user.firstName} ${membership.user.lastName}`.trim(),
           }));
-        
     } catch (error) {
-      console.error(
-        "Failed to retrieve project members:",
-        error,
-      );
-
       projectMembers.value = [];
     } finally {
       loadingMembers.value = false;
@@ -977,11 +971,6 @@
 
       await retrieveStories();
     } catch (error) {
-      console.error(
-        "Failed to create story:",
-        error,
-      );
-
       createStoryError.value =
         error.response?.data?.message ||
         "The user story could not be created.";

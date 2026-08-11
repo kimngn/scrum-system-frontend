@@ -42,11 +42,11 @@ export default {
   logoutUser() {
     return apiClient.post("logout");
   },
-  getAllUsers() {
-    return apiClient.get("users");
+  getAllUsers(params) {
+    return apiClient.get("users", { params });
   },
-  getRelatedUsers(userId) {
-    return apiClient.get("users/related/" + userId);
+  getRelatedUsers(userId, params) {
+    return apiClient.get("users/related/" + userId, { params });
   },
   updateUserRole(userId, roleData) {
     return apiClient.put("users/" + userId, roleData);

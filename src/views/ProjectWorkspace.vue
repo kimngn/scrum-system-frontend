@@ -434,7 +434,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <v-container>
+  <v-container fluid>
     <v-btn
       variant="text"
       prepend-icon="mdi-arrow-left"
@@ -479,8 +479,6 @@ onMounted(async () => {
       <v-tabs v-model="tab" color="primary" class="mt-4">
         <v-tab value="Summary">Summary</v-tab>
         <v-tab value="Sprints">Sprints</v-tab>
-        <v-tab value="User Stories">User Stories</v-tab>
-        <v-tab value="Acceptance Criteria">Acceptance Criteria</v-tab>
         <v-tab value="Repositories">Repositories</v-tab>
         <v-tab value="Activity">Activity</v-tab>
       </v-tabs>
@@ -636,13 +634,6 @@ onMounted(async () => {
         >
           No sprints yet.
         </v-alert>
-      </v-window-item>
-
-
-      <v-window-item value="User Stories">
-      </v-window-item>
-
-      <v-window-item value="Acceptance Criteria">
       </v-window-item>
 
       <v-window-item value="Repositories">
