@@ -107,7 +107,11 @@
     }
     if (allUsers.value.length === 0) {
       try {
-        const res = await UserServices.getAllUsers();
+        const call =
+          user.value?.role === "admin"
+            ? UserServices.getAllUsers()
+            : UserServices.getRelatedUsers(user.value?.id);
+        const res = await call;
         allUsers.value = res.data;
       } catch (err) {}
     }
@@ -136,7 +140,11 @@
   // when isEdit changes, update allUsers
   watch(isEdit, async (val) => {
     if (val && allUsers.value.length === 0) {
-      await UserServices.getAllUsers()
+      const call =
+        user.value?.role === "admin"
+          ? UserServices.getAllUsers()
+          : UserServices.getRelatedUsers(user.value?.id);
+      await call
         .then((res) => {
           allUsers.value = res.data;
         })

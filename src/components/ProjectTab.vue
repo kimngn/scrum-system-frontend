@@ -67,7 +67,11 @@
 
   watch(isAdd, async (val) => {
     if (val && allUsers.value.length === 0) {
-      await UserServices.getAllUsers()
+      const call =
+        user.value?.role === "admin"
+          ? UserServices.getAllUsers()
+          : UserServices.getRelatedUsers(user.value?.id);
+      await call
         .then((res) => {
           allUsers.value = res.data;
 
@@ -89,9 +93,9 @@
   // GET PROJECTS
   async function getProjects() {
     const call =
-      user.value?.role === "member"
-        ? ProjectServices.getProjectsByUserId(user.value.id)
-        : ProjectServices.getProjects();
+      user.value?.role === "admin"
+        ? ProjectServices.getProjects()
+        : ProjectServices.getProjectsByUserId(user.value.id);
     await call
       .then(async (response) => {
         projects.value = response.data;

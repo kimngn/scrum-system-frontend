@@ -45,6 +45,9 @@ export default {
   getAllUsers() {
     return apiClient.get("users");
   },
+  getRelatedUsers(userId) {
+    return apiClient.get("users/related/" + userId);
+  },
   updateUserRole(userId, roleData) {
     return apiClient.put("users/" + userId, roleData);
   },

@@ -117,7 +117,12 @@ async function openEdit() {
   }
   if (allUsers.value.length === 0) {
     try {
-      const res = await UserServices.getAllUsers();
+      const currentUser = JSON.parse(localStorage.getItem("user"));
+      const call =
+        currentUser?.role === "admin"
+          ? UserServices.getAllUsers()
+          : UserServices.getRelatedUsers(currentUser?.id);
+      const res = await call;
       allUsers.value = res.data;
     } catch {}
   }
@@ -403,7 +408,28 @@ onMounted(async () => {
     router.push({ name: "projects" });
     return;
   }
-  await Promise.all([loadProject(), loadMembers(), loadRepos(), loadSprints()]);
+
+  const loads = [loadProject()];
+  if (currentUser.role !== "lead") {
+    loads.push(loadMembers());
+  }
+  await Promise.all(loads);
+
+  if (currentUser.role === "lead") {
+    const res = await ProjectMembershipServices.getMembershipsByProjectId(
+      projectId,
+    );
+    members.value = Array.isArray(res.data) ? res.data : [];
+    const isMember = members.value.some(
+      (m) => (m.userId || m.user?.id) === currentUser.id,
+    );
+    if (project.value?.userId !== currentUser.id && !isMember) {
+      router.push({ name: "projects" });
+      return;
+    }
+  }
+
+  await Promise.all([loadRepos(), loadSprints()]);
 });
 </script>
 
