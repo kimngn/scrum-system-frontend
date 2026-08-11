@@ -162,8 +162,8 @@
         </template>
 
         <!-- Sprint -->
-        <template v-slot:item.Sprint_id="{ item }">
-          {{ item.Sprint_id || "Backlog" }}
+        <template v-slot:item.sprintId="{ item }">
+            {{ getSprintName(item.sprintId) }}
         </template>
 
         <template v-slot:no-data>
@@ -393,15 +393,26 @@
               />
 
               <!-- Status -->
-              <v-select
-                v-model="storyEdit.columnId"
-                :items="projectColumns"
-                item-title="title"
-                item-value="id"
-                label="Status"
-                variant="outlined"
-                :loading="loadingColumns"
-              />
+            <v-select
+              v-model="storyEdit.columnId"
+              :items="projectColumns"
+              item-title="title"
+              item-value="id"
+              label="Status"
+              variant="outlined"
+              :loading="loadingColumns"
+            />
+
+             <!-- Sprint -->
+            <v-select
+              v-model="storyEdit.sprintId"
+              :items="sprintOptions"
+              item-title="title"
+              item-value="value"
+              label="Sprint"
+              variant="outlined"
+              :loading="loadingSprints"
+            />
 
               <!-- Priority -->
               <v-select
@@ -472,7 +483,7 @@
   import ProjectServices from "../services/ProjectServices.js";
   import ProjectMembershipServices from "../services/ProjectMembershipServices.js";
   import ProjectColumnServices from "../services/ProjectColumnServices.js";
-
+  import SprintServices from "../services/SprintServices.js";
 
 
   const user = ref(
@@ -499,16 +510,24 @@
   const selectedStory = ref(null);
   const savingStoryDetails = ref(false);
   const storyDetailError = ref("");
+
+  //Project Column state
+  const projectColumns = ref([]);
+  const loadingColumns = ref(false);
+
+  //Sprint
+  const sprints = ref([]);
+  const loadingSprints = ref(false);
  
   const storyEdit = ref({
     title: "",
     description: "",
     priority: "Medium",
     storyPoint: 3,
-    columnId: 1,
+    columnId: null,
+    sprintId: null,
     assigneeIds: [],
   });
-
 
   // Error state
   const pageError = ref("");
@@ -521,16 +540,6 @@
   // Filters
   const search = ref("");
   const selectedStatus = ref("All");
-
-  const statuses = [
-    "All",
-    "Backlog",
-    "To Do",
-    "In Progress",
-    "Ready for Test",
-    "Testing",
-    "Done",
-  ];
 
   const priorities = [
     "Critical",
@@ -547,6 +556,19 @@
     8,
     13,
   ];
+
+ const sprintOptions = computed(() => {
+  return [
+    {
+      title: "Backlog",
+      value: null,
+    },
+    ...sprints.value.map((sprint) => ({
+      title: sprint.name,
+      value: sprint.id,
+    })),
+  ];
+});
 
   const headers = [
     {
@@ -576,7 +598,7 @@
     },
     {
       title: "Sprint",
-      key: "Sprint_id",
+      key: "sprintId",
     },
   ];
 
@@ -594,6 +616,48 @@
       assigneeIds: [],
     };
   }
+
+  function getSprintName(sprintId) {
+  if (sprintId == null) {
+    return "Backlog";
+  }
+
+  const sprint = sprints.value.find(
+    (sprint) => sprint.id === Number(sprintId)
+  );
+  //console.log("sprint", sprints)
+  return sprint?.name || "Backlog";
+}
+
+  async function retrieveProjectColumns() {
+  if (!projectId.value) {
+    projectColumns.value = [];
+    return;
+  }
+
+  try {
+    loadingColumns.value = true;
+
+    const response =
+      await ProjectColumnServices.getColumnsForProject(
+        projectId.value,
+      );
+
+    projectColumns.value =
+      Array.isArray(response.data)
+        ? response.data
+        : [];
+  } catch (error) {
+    console.error(
+      "Failed to retrieve project columns:",
+      error,
+    );
+
+    projectColumns.value = [];
+  } finally {
+    loadingColumns.value = false;
+  }
+}
 
   const newStory = ref(getDefaultStory());
 
@@ -669,13 +733,16 @@
   async function changeProject() {
     pageError.value = "";
     createStoryError.value = "";
+    storyDetailError.value = "";
 
     stories.value = [];
     projectMembers.value = [];
-    backlogColumnId.value = null;
+    projectColumns.value = [];
 
     search.value = "";
     selectedStatus.value = "All";
+
+    closeStoryDetails();
 
     if (!projectId.value) {
       return;
@@ -684,9 +751,43 @@
     await Promise.all([
       retrieveStories(),
       retrieveProjectMembers(),
+      retrieveProjectColumns(),
       retrieveBacklogColumn(),
     ]);
   }
+
+//retrieve sprints
+  async function retrieveSprints() {
+  if (!projectId.value) {
+    sprints.value = [];
+    return;
+  }
+
+  try {
+    loadingSprints.value = true;
+
+    const response =
+      await SprintServices.getSprintsByProjectId(
+        projectId.value
+      );
+
+    sprints.value =
+      Array.isArray(response.data)
+        ? response.data
+        : [];
+
+    console.log("Sprints value:", sprints.value);
+  } catch (error) {
+    console.error(
+      "Failed to retrieve sprints:",
+      error
+    );
+
+    sprints.value = [];
+  } finally {
+    loadingSprints.value = false;
+  }
+}
 
   /*
   * Gets stories only for the selected project.
@@ -703,7 +804,7 @@
         await StoryboardServices.getStoriesForProject(
           projectId.value,
         );
-  console.log("retrieve stories", response)
+ 
       stories.value =
         Array.isArray(response.data)
           ? response.data
@@ -757,7 +858,7 @@
         await ProjectMembershipServices.getMembershipsByProjectId(
           projectId.value,
         );
-    console.log("project members",response.data )
+ 
 
       // const memberships =
       //   Array.isArray(response.data)
@@ -771,7 +872,7 @@
             fullName:
               `${membership.user.firstName} ${membership.user.lastName}`.trim(),
           }));
-          console.log("assignee dropdown", projectMembers.value)
+        
     } catch (error) {
       console.error(
         "Failed to retrieve project members:",
@@ -883,6 +984,18 @@
     }
   }
 
+  function formatDate(date) {
+    if (!date) {
+      return "-";
+  }
+
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  }).format(new Date(date));
+}
+
   function getStoryStatus(story) {
     return (
       story.status ||
@@ -890,8 +1003,8 @@
       "Backlog"
     );
   }
-//this function is to open Story Details
 
+//this function is to open Story Details
 async function openStoryDetails(story) {
   if (!story?.id) {
     return;
@@ -899,7 +1012,12 @@ async function openStoryDetails(story) {
 
   selectedStory.value = story;
   storyDetailError.value = "";
-
+//load dropdown options FIRST
+  await Promise.all([
+    retrieveProjectMembers(),
+    retrieveProjectColumns(),
+    retrieveSprints(),
+  ]);
   // Make sure current project members are available
   // for the Assignees dropdown.
   await retrieveProjectMembers();
@@ -921,9 +1039,11 @@ async function openStoryDetails(story) {
 
     storyPoint:
       story.storyPoint ?? 3,
-
+//existing column auto selected
     columnId:
-      story.columnId ?? 1,
+      story.columnId ?? null,
+    
+    sprintId: story.sprintId ?? null,
 
     assigneeIds:
       assignments
@@ -939,6 +1059,8 @@ async function openStoryDetails(story) {
   };
 
   storyDetailDialog.value = true;
+
+
 }
 
 function closeStoryDetails() {
@@ -1002,6 +1124,8 @@ async function saveStoryDetails() {
 
       columnId:
         storyEdit.value.columnId,
+
+      sprintId: storyEdit.value.sprintId,
     };
 
     await StoryboardServices.updateStory(
@@ -1141,6 +1265,8 @@ async function saveStoryDetails() {
       await Promise.all([
         retrieveStories(),
         retrieveProjectMembers(),
+        retrieveProjectColumns(),
+        retrieveSprints(), // ADD THIS
       
       ]);
     } catch (error) {
