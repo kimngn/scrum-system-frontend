@@ -14,12 +14,20 @@
 
   // Columns shown when the user isn't assigned to a project so the storyboard has the error snackbar.
   const fallbackColumns = [
-    { id: 1, title: "Backlog" },
-    { id: 2, title: "To Do" },
-    { id: 3, title: "In Progress" },
-    { id: 4, title: "Ready for Test" },
-    { id: 5, title: "Testing" },
-    { id: 6, title: "Done" },
+    { id: 1, title: "Backlog", type: "Does nothing" },
+    { id: 2, title: "To Do", type: "Does nothing" },
+    { id: 3, title: "In Progress", type: "Creates a new branch" },
+    { id: 4, title: "Ready for Test", type: "Creates a new PR" },
+    { id: 5, title: "Testing", type: "Does nothing" },
+    { id: 6, title: "Done", type: "Does nothing" },
+  ];
+
+  // For column type dropdown
+  // types are currently hard coded instead of having an enum, will get to that later if there's enough time
+  const typeOptions = [
+    "Does nothing",
+    "Creates a new PR",
+    "Creates a new branch",
   ];
 
   const priorityOptions = ["Critical", "High", "Medium", "Low"];
@@ -51,14 +59,29 @@
   const canManageColumns = ref(false);
   const showColumnDialog = ref(false);
   const newColumnTitle = ref("");
+  const newColumnType = ref("Does nothing");
   const draggedColumn = ref(null);
   const hoverColumnRowId = ref(null);
+
+  // Snackbar
+  const snackbar = ref({
+    value: false,
+    color: "",
+    text: "",
+  });
 
   // Variables related to branch + pull requests
   const repos = ref([]);
   const branches = ref([]);
   const editingBranch = ref(null);
-  const newBranch = ref(null);
+  const triggerBranchPopup = ref(false);
+  const newBranchTitle = ref("");
+  const newBranchRepo = ref("");
+  const draggedBranch = ref(""); // the branch of a dragged story
+  const draggedStoryId = ref(null); // grab draggedStoryId before it gets reset on endDrag()
+  const newBranchColumnId = ref(null); // grab columnId before it gets reset on endDrag()
+  const showColumnError = ref(false);
+  const showPostBranchSuccess = ref(false);
 
   // Sprint dropdown used to filter the board. Null shows every sprint.
   const sprintFilterOptions = computed(() => {
@@ -134,16 +157,18 @@
   });
 
   // Loads everything to the selected project.
-async function loadProjectData() {
-  // Gets the project's columns from the backend.
-  await getColumns();
-  // Gets the user assignees from the backend
-  await getAssignees();
-  // Gets the project's sprints from the backend.
-  await getSprints();
-  // Gets the stories from the backend.
-  await getStories();
-}
+  async function loadProjectData() {
+    // Gets the project's columns from the backend.
+    await getColumns();
+    // Gets the user assignees from the backend
+    await getAssignees();
+    // Gets the project's sprints from the backend.
+    await getSprints();
+    // Gets the stories from the backend.
+    await getStories();
+    // Gets the repos from the backend.
+    await RepoServices.getReposByProjectId(projectId.value);
+  }
 
   // Runs when the user picks a different project from the dropdown.
   async function changeProject() {
@@ -174,7 +199,7 @@ async function loadProjectData() {
             sprintStillExists = true;
           }
         }
-         // Clears the  filter if the sprint doesn't exist.
+        // Clears the  filter if the sprint doesn't exist.
         if (selectedSprintId.value !== null && !sprintStillExists) {
           selectedSprintId.value = null;
           localStorage.removeItem("storyboardSprintId");
@@ -264,6 +289,7 @@ async function loadProjectData() {
       columnList.push({
         id: projectColumns.value[i].id,
         title: projectColumns.value[i].title,
+        type: projectColumns.value[i].type,
 
         // Starts columns with empty story list.
         stories: [],
@@ -351,14 +377,32 @@ async function loadProjectData() {
   }
 
   // Save story being dragged.
-  function startDrag(story) {
+  async function startDrag(story) {
+    showPostBranchSuccess.value = false;
     draggedStory.value = story;
+
+    // get the branch associated with currently dragged story
+    try {
+      const response = await BranchServices.getBranchByStoryId(
+        draggedStory.value.id,
+      );
+      draggedBranch.value = response.data || null; // turn undefined into null
+      console.log("Dragged branch: " + draggedBranch.value.id);
+    } catch (error) {
+      console.log(error);
+    }
   }
 
   // Clears drag values.
   function endDrag() {
+    draggedStoryId.value = draggedStory.value.id;
+    newBranchColumnId.value = draggedStory.value.columnId;
+    console.log("Column ID:" + newBranchColumnId.value);
+
     draggedStory.value = null;
     hoverColumnId.value = null;
+
+    console.log("END DRAG");
   }
 
   // Outlines the column being dragged over.
@@ -366,7 +410,22 @@ async function loadProjectData() {
     hoverColumnId.value = columnId;
   }
 
-  async function dropStory(columnId) {
+  async function dropStory(columnId, columnType) {
+    console.log("Dropped story");
+
+    if (columnType == "Do nothing") {
+      console.log("Do nothing!");
+    } else if (columnType == "Creates a new PR") {
+      console.log("Trigger PR creation for story:" + draggedStory.value.title);
+      await triggerPR();
+      console.log("PR created!");
+    } else if (columnType == "Creates a new branch") {
+      // need to figure out if story already has a branch
+      await triggerBranch();
+
+      console.log("Branch created!");
+    }
+
     hoverColumnId.value = null;
 
     // If story is dropped in the same column do nothing.
@@ -396,6 +455,7 @@ async function loadProjectData() {
 
     draggedStory.value = null;
   }
+
   async function saveStory(editingBranch) {
     // Title can't be empty.
     if (formTitle.value === "") {
@@ -430,27 +490,56 @@ async function loadProjectData() {
 
     var branch = null;
     editingStoryId.value = storyId;
+
+    if (repos.value.length == 1) {
+      newBranchRepo.value = repos.value[0];
+    }
     // better fix may be to just allow these fields to be nullable in the model
     if (!editingBranch) {
       // user left dropdown blank
-    } else if (isEditing.value && editingBranch.dbBranch?.id) // for Edit dialog
-    {
+    } else if (isEditing.value && editingBranch.dbBranch?.id) {
+      // for Edit dialog
+      try {
+        const response = await BranchServices.getShaAndDefaultBranch(
+          newBranchRepo.value,
+        );
+        console.log("SHA:" + response.data);
+        var sha = response.data.sha;
+        var ref = response.data.ref; // not needed for creation, but for updates/deletions
+      } catch (error) {
+        console.log("Error:" + error);
+      }
       branch = {
         id: editingBranch.dbBranch.id,
         title: editingBranch.name,
         storyId: editingBranch.dbBranch.storyId,
         repoId: editingBranch.dbBranch.repoId,
         columnId: editingBranch.dbBranch.columnId,
+        sha: sha,
+        ref: ref,
       };
       await BranchServices.updateBranch(branch);
       console.log("Branch updated");
     } else {
       // for Create dialog
+
+      try {
+        const response = await BranchServices.getShaAndDefaultBranch(
+          newBranchRepo.value,
+        );
+        console.log("SHA:" + response.data);
+        var sha = response.data.sha;
+        var ref = response.data.ref; // not needed for creation, but for updates/deletions
+      } catch (error) {
+        console.log("Error:" + error);
+      }
       branch = {
         title: editingBranch.name,
         userStoryId: storyId,
         repoId: editingBranch.repoId,
         columnId: selectedColumnId.value,
+        sha: sha,
+        ref: ref,
       };
       console.log("Sending branch:", branch);
       try {
@@ -505,14 +594,25 @@ async function loadProjectData() {
       return;
     }
 
+    if (
+      (repos.value.length == 0 &&
+        newColumnType.value === "Creates a new branch") ||
+      (repos.value.length == 0 && newColumnType.value === "Creates a new PR")
+    ) {
+      showColumnError.value = true;
+      return;
+    }
+
     await ProjectColumnServices.addColumn({
       title: newColumnTitle.value,
       displayOrder: projectColumns.value.length + 1,
       projectId: projectId.value,
+      type: newColumnType.value,
       role: user.value.role,
     });
 
     newColumnTitle.value = "";
+    newColumnType.value = "Does nothing";
     await getColumns();
   }
 
@@ -570,6 +670,82 @@ async function loadProjectData() {
     // from newBranch
     editingBranch.value = newBranch;
   }
+
+  function triggerPR() {
+    console.log("GithubAPI PR creation!");
+  }
+
+  function triggerBranch() {
+    if (!draggedBranch.value.id) {
+      // new branch pop up appears if the story doesn't have a branch
+      triggerBranchPopup.value = true;
+    }
+
+    console.log("GithubAPI branch creation!");
+  }
+
+  async function createBranch() {
+    // just get the first repo in repos
+    if (repos.value.length == 1) {
+      newBranchRepo.value = repos.value[0];
+    }
+
+    console.log(
+      "Created branch in" +
+        newBranchRepo.value.name +
+        " titled " +
+        newBranchTitle.value,
+    );
+
+    // send to database
+    // get sha of main branch (need it for later for PRs)
+    try {
+      const response = await BranchServices.getShaAndDefaultBranch(
+        newBranchRepo.value,
+      );
+      console.log("SHA:" + response.data);
+      var sha = response.data.sha;
+      var ref = response.data.ref; // not needed for creation, but for updates/deletions
+    } catch (error) {
+      console.log("Error:" + error);
+    }
+
+    console.log("CREATE BRANCH COLUMN ID" + newBranchColumnId.value);
+    var branch = {
+      title: newBranchTitle.value,
+      userStoryId: draggedStoryId.value,
+      repoId: newBranchRepo.value.id,
+      columnId: newBranchColumnId.value,
+      sha: sha,
+      ref: ref,
+    };
+
+    try {
+      await BranchServices.addBranch(branch);
+    } catch (error) {
+      if (error.response) {
+        console.error("Error response:", error.response.data);
+      } else {
+        console.error("Error:", error.message);
+      }
+    }
+    console.log("Branch created in database");
+
+    // send to Github
+    try {
+      await BranchServices.postBranchToGitHub(newBranchRepo.value, branch, sha);
+      showPostBranchSuccess.value = true;
+    } catch (error) {
+      if (error.response) {
+        console.error("Error response:", error.response.data);
+      } else {
+        console.error("Error:", error.message);
+      }
+    }
+    console.log("Branch created in Github");
+    newBranchTitle.value = "";
+    triggerBranchPopup.value = false;
+  }
 </script>
 
 <template>
@@ -622,7 +798,13 @@ async function loadProjectData() {
         v-if="canManageColumns"
         color="primary"
         variant="outlined"
-        @click="showColumnDialog = true"
+        @click="
+          () => {
+            // asked AI for help on how to get two variable assignments in a single click
+            showColumnDialog = true; // open columnDialog
+            showColumnError = false; // reset error
+          }
+        "
       >
         Manage Columns
       </v-btn>
@@ -637,7 +819,7 @@ async function loadProjectData() {
         :key="column.id"
         class="storyboard-column"
         @dragover.prevent="dragEnter(column.id)"
-        @drop="dropStory(column.id)"
+        @drop="dropStory(column.id, column.type)"
       >
         <div class="column-header">
           <span class="text-subtitle-1 font-weight-bold">
@@ -874,23 +1056,41 @@ async function loadProjectData() {
             ></v-btn>
           </div>
 
-          <!-- Adds a new column at the end. -->
-          <div class="d-flex align-center mt-4">
-            <v-text-field
-              v-model="newColumnTitle"
-              label="New column title"
-              density="compact"
-              hide-details
-            ></v-text-field>
+          <div class="newColumn rounded=lg mt-7">
+            <!--  <div v-if="repos.length === 0"> -->
+            <p class="form-label">
+              When user story items are dropped into this column, GitHub...
+            </p>
 
-            <v-btn
-              color="primary"
-              variant="text"
-              class="ml-2"
-              @click="addColumn"
-            >
-              Add
-            </v-btn>
+            <div class="d-flex align-center">
+              <v-select
+                v-model="newColumnType"
+                :items="typeOptions"
+                placeholder="Select column type"
+                density="compact"
+              >
+              </v-select>
+            </div>
+            <!--   </div> -->
+
+            <!-- Adds a new column at the end. -->
+            <div class="d-flex align-center mt-4">
+              <v-text-field
+                v-model="newColumnTitle"
+                label="New column title"
+                density="compact"
+                hide-details
+              ></v-text-field>
+
+              <v-btn
+                color="primary"
+                variant="text"
+                class="ml-2"
+                @click="addColumn"
+              >
+                Add
+              </v-btn>
+            </div>
           </div>
         </v-card-text>
 
@@ -898,6 +1098,54 @@ async function loadProjectData() {
           <v-spacer></v-spacer>
           <v-btn variant="text" @click="showColumnDialog = false">Close</v-btn>
         </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <v-dialog v-model="triggerBranchPopup" width="500">
+      <v-card>
+        <v-card-title>Create new Github branch</v-card-title>
+
+        <v-card-text>
+          <div class="d-flex align-center">
+            <v-col>
+              <div class="form-label mb-5">Branch title:</div>
+              <v-row class="mb-2">
+                <v-text-field
+                  v-model="newBranchTitle"
+                  density="compact"
+                  placeholder="user-branch-title"
+                  hide-details
+                ></v-text-field>
+              </v-row>
+
+              <div v-if="repos.length > 1">
+                <div class="form-label mb-5 mt-6">
+                  Repository to create branch in:
+                </div>
+
+                <v-row>
+                  <v-select
+                    v-model="newBranchRepo"
+                    :items="repos"
+                    placeholder="Select a repository"
+                    density="compact"
+                    item-title="name"
+                    return-object
+                  />
+                </v-row>
+              </div>
+
+              <v-row>
+                <button
+                  @click.stop="createBranch()"
+                  class="createButtonStyle mt-3"
+                >
+                  Create
+                </button>
+              </v-row>
+            </v-col>
+          </div>
+        </v-card-text>
       </v-card>
     </v-dialog>
 
@@ -911,6 +1159,24 @@ async function loadProjectData() {
       You must be in a project before creating a user story.
     </v-snackbar>
 
+    <v-snackbar
+      v-model="showColumnError"
+      location="bottom"
+      timeout="3000"
+      color="red"
+    >
+      You must have a repository connected to this project in order to use this
+      column type.
+    </v-snackbar>
+
+    <v-snackbar
+      v-model="showPostBranchSuccess"
+      location="bottom"
+      timeout="3000"
+      color="green"
+    >
+      A new branch has been created on Github!
+    </v-snackbar>
     <!-- Chatbot for asking questions about this project's stories and sprints. -->
     <ChatWidget :project-id="projectId"></ChatWidget>
   </v-container>
@@ -968,5 +1234,17 @@ async function loadProjectData() {
   }
   .story-dialog-card {
     transform: translateY(-20px);
+  }
+
+  .createButtonStyle {
+    background-color: rgb(26, 161, 146);
+    border-width: 2px;
+    border-color: black; /* why is there no outline? */
+    color: white;
+    padding: 5px 5px;
+    width: 100px;
+    text-align: center;
+    display: inline-block;
+    border-radius: 6%;
   }
 </style>

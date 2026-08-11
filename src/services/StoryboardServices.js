@@ -4,7 +4,7 @@ export default {
   getStoriesForProject(projectId) {
     return apiClient.get("projects/" + projectId + "/stories");
   },
-  getAllStoriesInBacklog(){
+  getAllStoriesInBacklog() {
     return apiClient.get("stories");
   },
   createStory(story) {
@@ -15,5 +15,9 @@ export default {
   },
   deleteStory(storyId) {
     return apiClient.delete("stories/" + storyId);
+  },
+
+  triggerPR(story) {
+    return apiClient.post("stories/", story);
   },
 };
