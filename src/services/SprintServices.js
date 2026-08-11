@@ -13,6 +13,9 @@ export default {
   addSprint(sprint) {
     return apiClient.post("sprints", sprint);
   },
+  duplicateSprint(sourceSprintId, sprint) {
+    return apiClient.post("sprints/" + sourceSprintId + "/duplicate", sprint);
+  },
   updateSprint(sprintId, sprint) {
     return apiClient.put("sprints/" + sprintId, sprint);
   },
