@@ -63,18 +63,25 @@
         Storyboard
       </v-btn>
       <v-btn
-        v-if="user !== null && user.role === 'member'"
+        v-if="user !== null && (user.role === 'member' || user.role === 'lead' || user.role === 'admin')"
         class="mx-2"
         :to="{ name: 'backlogs' }"
       >
         Backlogs
       </v-btn>
       <v-btn
-        v-if="user !== null && user.role === 'member'"
+         v-if="user !== null && (user.role === 'member' || user.role === 'lead' || user.role === 'admin')"
         class="mx-2"
         :to="{ name: 'issues' }"
       >
         Issues
+      </v-btn>
+       <v-btn
+         v-if="user !== null && (user.role === 'member' || user.role === 'lead' || user.role === 'admin')"
+        class="mx-2"
+        :to="{ name: 'retro' }"
+      >
+        Retrospective
       </v-btn>
       <v-menu v-if="user !== null" min-width="200px" rounded>
         <template v-slot:activator="{ props }">

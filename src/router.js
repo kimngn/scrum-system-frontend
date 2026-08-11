@@ -39,6 +39,11 @@ const router = createRouter({
       component: () => import("./views/Issues.vue"),
     },
     {
+      path: "/retro",
+      name: "retro",
+      component: () => import("./views/Retrospective.vue"),
+    },
+    {
       path: "/projects/:id",
       name: "project-workspace",
       component: () => import("./views/ProjectWorkspace.vue"),
