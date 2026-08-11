@@ -19,7 +19,7 @@
     icon="mdi-arrow-left"
     @click="navigateToAdmin()"
   ></v-icon>
-  <v-container>
+  <v-container fluid>
     <div id="body">
       <Tabs>
         <Tab value="Project">

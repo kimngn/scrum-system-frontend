@@ -14,6 +14,10 @@
   const projects = ref([]);
   const allUsers = ref([]);
 
+  // Search and filter
+  const searchName = ref("");
+  const filterStatus = ref("");
+
   const isAdd = ref(false);
 
   // current date
@@ -92,10 +96,14 @@
 
   // GET PROJECTS
   async function getProjects() {
+    const params = {};
+    if (searchName.value) params.name = searchName.value;
+    if (filterStatus.value) params.status = filterStatus.value;
+
     const call =
       user.value?.role === "admin"
-        ? ProjectServices.getProjects()
-        : ProjectServices.getProjectsByUserId(user.value.id);
+        ? ProjectServices.getProjects(params)
+        : ProjectServices.getProjectsByUserId(user.value.id, params);
     await call
       .then(async (response) => {
         projects.value = response.data;
@@ -106,6 +114,16 @@
           error.response?.data?.message || "Failed to fetch projects",
         );
       });
+  }
+
+  function applyFilters() {
+    getProjects();
+  }
+
+  function clearFilters() {
+    searchName.value = "";
+    filterStatus.value = "";
+    getProjects();
   }
 
   // GET USERS
@@ -332,6 +350,42 @@
         >
       </v-col>
     </v-row>
+
+    <!-- Search and Filter Section -->
+    <v-card class="mb-4 pa-4 rounded-lg elevation-2">
+      <v-row>
+        <v-col cols="12" md="6">
+          <v-text-field
+            v-model="searchName"
+            label="Search by name"
+            placeholder="Project name"
+            variant="outlined"
+            density="comfortable"
+            hide-details
+            clearable
+          ></v-text-field>
+        </v-col>
+        <v-col cols="12" md="3">
+          <v-select
+            v-model="filterStatus"
+            label="Filter by status"
+            :items="['', 'active', 'inactive', 'completed']"
+            variant="outlined"
+            density="comfortable"
+            hide-details
+            clearable
+          ></v-select>
+        </v-col>
+        <v-col cols="12" md="3" class="d-flex align-center ga-2">
+          <v-btn color="primary" variant="flat" @click="applyFilters" block>
+            Search
+          </v-btn>
+          <v-btn color="grey" variant="flat" @click="clearFilters" block>
+            Clear
+          </v-btn>
+        </v-col>
+      </v-row>
+    </v-card>
 
     <div>
       <ProjectCard

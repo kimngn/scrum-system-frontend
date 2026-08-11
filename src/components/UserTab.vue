@@ -10,6 +10,10 @@
   const user = ref(null);
   const isAdd = ref(false); // open dialog box
 
+  // Search and filter
+  const searchName = ref("");
+  const filterRole = ref("");
+
   // Dropdown options
   const roles = ref(["admin", "lead", "member"]);
 
@@ -39,10 +43,17 @@
 
   async function getUsers() {
     console.log("getUsers called");
+    const params = {};
+    if (searchName.value) params.name = searchName.value;
+    if (filterRole.value) params.role = filterRole.value;
+
+    // When filter is applied, search all users. Otherwise, use role-based access.
+    const hasFilter = searchName.value || filterRole.value;
+
     const call =
-      loggedInUser.value?.role === "admin"
-        ? UserServices.getUsers()
-        : UserServices.getRelatedUsers(loggedInUser.value?.id);
+      loggedInUser.value?.role === "admin" || hasFilter
+        ? UserServices.getAllUsers(params)
+        : UserServices.getRelatedUsers(loggedInUser.value?.id, params);
     await call
       .then((response) => {
         users.value = response.data;
@@ -53,6 +64,16 @@
         snackbar.value.color = "error";
         snackbar.value.text = error.response?.data?.message;
       });
+  }
+
+  function applyFilters() {
+    getUsers();
+  }
+
+  function clearFilters() {
+    searchName.value = "";
+    filterRole.value = "";
+    getUsers();
   }
 
   async function addUser() {
@@ -105,6 +126,42 @@
           <v-btn color="accent" @click="openAdd()">Add User</v-btn>
         </v-col>
       </v-row>
+
+      <!-- Search and Filter Section -->
+      <v-card class="mb-4 pa-4 rounded-lg elevation-2">
+        <v-row>
+          <v-col cols="12" md="6">
+            <v-text-field
+              v-model="searchName"
+              label="Search by name"
+              placeholder="First or last name"
+              variant="outlined"
+              density="comfortable"
+              hide-details
+              clearable
+            ></v-text-field>
+          </v-col>
+          <v-col cols="12" md="3">
+            <v-select
+              v-model="filterRole"
+              label="Filter by role"
+              :items="['', 'admin', 'lead', 'member']"
+              variant="outlined"
+              density="comfortable"
+              hide-details
+              clearable
+            ></v-select>
+          </v-col>
+          <v-col cols="12" md="3" class="d-flex align-center ga-2">
+            <v-btn color="primary" variant="flat" @click="applyFilters" block>
+              Search
+            </v-btn>
+            <v-btn color="grey" variant="flat" @click="clearFilters" block>
+              Clear
+            </v-btn>
+          </v-col>
+        </v-row>
+      </v-card>
 
       <!---->
       <UserCard

@@ -520,10 +520,13 @@ async function retrieveUserProjects() {
   try {
     loadingProjects.value = true;
 
-    const response =
-      await ProjectServices.getProjectsByUserId(
-        user.value.id,
-      );
+    // Admins see all projects, members/leads see only assigned projects
+    const projectCall =
+      user.value.role === "admin"
+        ? ProjectServices.getProjects()
+        : ProjectServices.getProjectsByUserId(user.value.id);
+
+    const response = await projectCall;
 
     userProjects.value = Array.isArray(response.data)
       ? response.data

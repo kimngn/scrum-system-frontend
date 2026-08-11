@@ -84,7 +84,7 @@ function closeSnackBar() {
 </script>
 
 <template>
-  <v-container>
+  <v-container fluid>
     <div id="body">
       <v-row align="center" class="mb-4">
         <v-col cols="10"

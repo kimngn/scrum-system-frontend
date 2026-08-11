@@ -116,7 +116,13 @@
     canManageColumns.value =
       user.value.role === "lead" || user.value.role === "admin";
 
-    await ProjectServices.getProjectsByUserId(user.value.id)
+    // Admins see all projects, members/leads see only assigned projects
+    const projectCall =
+      user.value.role === "admin"
+        ? ProjectServices.getProjects()
+        : ProjectServices.getProjectsByUserId(user.value.id);
+
+    await projectCall
       .then((response) => {
         userProjects.value = response.data;
         // Gets the last selected project.
@@ -138,7 +144,7 @@
         }
       })
       .catch((error) => {
-        console.log(error);
+        // Error handling
       });
     // Gets the repos for the selected project.
     await RepoServices.getReposByProjectId(projectId.value)
@@ -146,7 +152,7 @@
         repos.value = response.data;
       })
       .catch((error) => {
-        console.log(error);
+        // Error handling
       });
 
     // Restores the last selected sprint filter.
@@ -206,7 +212,7 @@
         }
       })
       .catch((error) => {
-        console.log(error);
+        // Error handling
       });
   }
 
@@ -237,7 +243,7 @@
         buildColumns();
       })
       .catch((error) => {
-        console.log(error);
+        // Error handling
       });
   }
 
@@ -263,7 +269,7 @@
         assigneeOptions.value = options;
       })
       .catch((error) => {
-        console.log(error);
+        // Error handling
       });
   }
 
@@ -276,7 +282,7 @@
         buildColumns();
       })
       .catch((error) => {
-        console.log(error);
+        // Error handling
       });
   }
 
@@ -386,10 +392,9 @@
       const response = await BranchServices.getBranchByStoryId(
         draggedStory.value.id,
       );
-      draggedBranch.value = response.data || null; // turn undefined into null
-      console.log("Dragged branch: " + draggedBranch.value.id);
+      draggedBranch.value = response.data || null;
     } catch (error) {
-      console.log(error);
+      // Error handling
     }
   }
 
@@ -397,12 +402,9 @@
   function endDrag() {
     draggedStoryId.value = draggedStory.value.id;
     newBranchColumnId.value = draggedStory.value.columnId;
-    console.log("Column ID:" + newBranchColumnId.value);
 
     draggedStory.value = null;
     hoverColumnId.value = null;
-
-    console.log("END DRAG");
   }
 
   // Outlines the column being dragged over.
@@ -411,19 +413,12 @@
   }
 
   async function dropStory(columnId, columnType) {
-    console.log("Dropped story");
-
     if (columnType == "Do nothing") {
-      console.log("Do nothing!");
+      // Do nothing
     } else if (columnType == "Creates a new PR") {
-      console.log("Trigger PR creation for story:" + draggedStory.value.title);
       await triggerPR();
-      console.log("PR created!");
     } else if (columnType == "Creates a new branch") {
-      // need to figure out if story already has a branch
       await triggerBranch();
-
-      console.log("Branch created!");
     }
 
     hoverColumnId.value = null;
@@ -450,7 +445,7 @@
       // Refresh story board.
       await getStories();
     } catch (error) {
-      console.log(error);
+      // Error handling
     }
 
     draggedStory.value = null;
@@ -498,16 +493,14 @@
     if (!editingBranch) {
       // user left dropdown blank
     } else if (isEditing.value && editingBranch.dbBranch?.id) {
-      // for Edit dialog
       try {
         const response = await BranchServices.getShaAndDefaultBranch(
           newBranchRepo.value,
         );
-        console.log("SHA:" + response.data);
         var sha = response.data.sha;
-        var ref = response.data.ref; // not needed for creation, but for updates/deletions
+        var ref = response.data.ref;
       } catch (error) {
-        console.log("Error:" + error);
+        // Error handling
       }
       branch = {
         id: editingBranch.dbBranch.id,
@@ -519,19 +512,15 @@
         ref: ref,
       };
       await BranchServices.updateBranch(branch);
-      console.log("Branch updated");
     } else {
-      // for Create dialog
-
       try {
         const response = await BranchServices.getShaAndDefaultBranch(
           newBranchRepo.value,
         );
-        console.log("SHA:" + response.data);
         var sha = response.data.sha;
-        var ref = response.data.ref; // not needed for creation, but for updates/deletions
+        var ref = response.data.ref;
       } catch (error) {
-        console.log("Error:" + error);
+        // Error handling
       }
       branch = {
         title: editingBranch.name,

@@ -2,9 +2,7 @@
   import { onMounted } from "vue";
   import { ref } from "vue";
   import { useRouter } from "vue-router";
-  import { Tabs, Tab } from "super-vue3-tabs";
   import UserServices from "../services/UserServices.js";
-  import ProjectTab from "../components/ProjectTab.vue";
   import UserTab from "../components/UserTab.vue";
 
   const router = useRouter();
@@ -62,22 +60,8 @@
 </script>
 
 <template>
-  <!-- https://mdsaban.com/packages/super-vue3-tabs-component/demo/ -->
-  <v-container>
-    <Tabs>
-      <Tab value="Users">
-        <template #icon>
-          <i class="fas fa-home"></i>
-        </template>
-        <UserTab />
-      </Tab>
-      <Tab value="Projects">
-        <template #icon>
-          <i class="fas fa-user"></i>
-        </template>
-        <ProjectTab />
-      </Tab>
-    </Tabs>
+  <v-container fluid>
+    <UserTab />
 
     <v-btn class="systemLogsButton" @click="navigateToSystemLogs()"
       >System Logs</v-btn
