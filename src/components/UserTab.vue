@@ -70,12 +70,6 @@
     getUsers();
   }
 
-  function clearFilters() {
-    searchName.value = "";
-    filterRole.value = "";
-    getUsers();
-  }
-
   async function addUser() {
     await UserServices.addUser(newUser.value)
       .then(() => {
@@ -155,9 +149,6 @@
           <v-col cols="12" md="3" class="d-flex align-center ga-2">
             <v-btn color="primary" variant="flat" @click="applyFilters" block>
               Search
-            </v-btn>
-            <v-btn color="grey" variant="flat" @click="clearFilters" block>
-              Clear
             </v-btn>
           </v-col>
         </v-row>
