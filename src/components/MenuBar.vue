@@ -46,7 +46,14 @@
       </v-toolbar-title>
       <v-spacer></v-spacer>
       <v-btn
-        v-if="user !== null && user.role !== 'admin'"
+        v-if="user !== null && (user.role === 'admin' || user.role === 'lead')"
+        class="mx-2"
+        :to="{ name: 'admin' }"
+      >
+        Users
+      </v-btn>
+      <v-btn
+        v-if="user !== null"
         class="mx-2"
         :to="{ name: 'projects' }"
       >
